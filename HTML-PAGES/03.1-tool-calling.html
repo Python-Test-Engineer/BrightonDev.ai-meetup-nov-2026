@@ -5,107 +5,11 @@
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <title>OpenRouter Tool Calling in Browser</title>
-   <link rel="preconnect" href="https://fonts.googleapis.com">
-   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-   <link
-      href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap"
-      rel="stylesheet">
-   <link rel="stylesheet" href="03-style-tool.css">
-   <link rel="stylesheet" href="anthropic-ui.css">
    <script src="config.js"></script>
-   <style>
-      .container {
-         flex: 0 0 auto;
-         display: flex;
-         flex-direction: column;
-         width: 100%;
-         max-width: none;
-         margin: 0;
-         padding: 20px 22px 0;
-         overflow: visible;
-         border: 1px solid var(--line);
-         border-radius: 20px;
-         background: var(--surface);
-         box-shadow: 0 4px 18px rgba(31, 30, 29, .045);
-      }
-
-      .container::before {
-         margin-bottom: 7px;
-         color: #a14e2f;
-         content: '03 · Tool use';
-         font-size: 12px;
-         font-weight: 600;
-         letter-spacing: .12em;
-         text-align: center;
-         text-transform: uppercase;
-      }
-
-      .container > h1 {
-         margin: 0;
-         color: var(--ink);
-         font: 500 clamp(34px, 5vw, 48px)/1.12 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
-         letter-spacing: -.035em;
-         text-align: center;
-      }
-
-      .container > h2 {
-         margin: 10px auto 18px;
-         color: var(--muted);
-         font: 400 22px/1.45 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
-         text-align: center;
-      }
-
-      .input-group {
-         margin: 0 0 12px;
-      }
-
-      .input-group label {
-         margin: 0 0 7px;
-         color: var(--ink);
-         font-size: 28px;
-         font-weight: 600;
-      }
-
-      .input-group input {
-         width: 100%;
-         min-width: 0;
-         margin: 0;
-         padding: 11px 14px;
-         border: 1px solid #ddd7ca;
-         border-radius: 9px;
-         background: var(--ivory);
-         color: var(--ink);
-         font: 30px/1.4 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
-      }
-
-      .input-group input:focus-visible {
-         outline: 2px solid #e3a98f;
-         outline-offset: 2px;
-      }
-
-      .container > button {
-         align-self: flex-start;
-         margin: 2px 0 14px;
-      }
-
-      #result {
-         border-top: 1px solid var(--line);
-      }
-
-      @media (max-width: 640px) {
-         .container {
-            padding: 15px 15px 0;
-         }
-
-         .container > h2 {
-            margin-bottom: 12px;
-            font-size: 17px;
-         }
-      }
-   </style>
+   <link rel="stylesheet" href="anthropic-ui.css">
 </head>
 
-<body>
+<body class="page-tool-calling">
    <div class="container">
       <h1>🛠️ OpenRouter Tool Calling Demo</h1>
       <h2>Demonstrates tool calling with get_weather() and get_sum() functions</h2>
