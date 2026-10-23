@@ -8,7 +8,10 @@ call the OpenRouter chat API directly, plus the talk's notes and supporting mate
 - **`HTML-PAGES/`** — Vanilla HTML + JS demos that call
   `https://openrouter.ai/api/v1/chat/completions` directly from the browser.
   Covers plain chat, RAG (context in the system prompt), tool calling, and
-  chat-with-memory. Includes two animated explainer pages.
+  chat-with-memory. The current pages are `01-basic.html`, `02-rag.html`,
+  `03.1-tool-call-anthropic-animation.html`, `03.2-tool-calling.html`,
+  `04.1-chat-with-memory-animation.html`, and `04.2-chat-with-memory.html`.
+  `anthropic-ui.css` contains their shared visual styles.
 - **`main.py`** — placeholder entry point for the uv project (`uv run main.py`).
 
 ## Notes & support material
@@ -51,7 +54,7 @@ pages over HTTP (required — they won't load from `file://`), and troubleshooti
 
 # 2. Browser demos (serve from repo root)
 python -m http.server 8000
-# open http://localhost:8000/HTML-PAGES/01.1-basic.html
+# open http://localhost:8000/HTML-PAGES/01-basic.html
 
 # 3. Talk slides
 # open TALK.html in a browser, or read TALK.md
