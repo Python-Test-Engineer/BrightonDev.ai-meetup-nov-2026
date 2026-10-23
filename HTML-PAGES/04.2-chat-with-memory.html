@@ -4,7 +4,7 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>OpenRouter API in Browser</title>
+   <title>Chat with Memory — OpenRouter</title>
    <link rel="preconnect" href="https://fonts.googleapis.com">
    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
    <link
@@ -12,21 +12,340 @@
       rel="stylesheet">
    <link rel="stylesheet" href="01-style.css">
    <script src="config.js"></script>
+   <style>
+      :root {
+         --paper: #f0eee6;
+         --surface: #fbfaf7;
+         --ivory: #fffdfa;
+         --ink: #1f1e1d;
+         --muted: #55524c;
+         --stone: #8c877c;
+         --line: #e2ddd2;
+         --terra: #d97757;
+         --terra-dark: #c9633f;
+         --sand: #f6f2e9;
+      }
+
+      * {
+         box-sizing: border-box;
+         font-family: -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+         font-size: 16px;
+      }
+
+      body {
+         width: min(1040px, calc(100% - 40px));
+         max-width: none;
+         height: 100vh;
+         height: 100dvh;
+         min-height: 0;
+         margin: 0 auto;
+         padding: 18px 0 20px;
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+         color: var(--ink);
+         background: var(--paper);
+         font: 16px/1.55 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+      }
+
+      .page-heading {
+         flex: 0 0 auto;
+         margin: 0 auto 14px;
+         text-align: center;
+      }
+
+      .eyebrow {
+         margin: 0 0 7px;
+         color: #a14e2f;
+         font-size: 12px;
+         font-weight: 600;
+         letter-spacing: .12em;
+         text-transform: uppercase;
+      }
+
+      h1 {
+         margin: 0;
+         color: var(--ink);
+         font: 500 clamp(34px, 5vw, 48px)/1.12 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+         letter-spacing: -.035em;
+      }
+
+      .lede {
+         max-width: 700px;
+         margin: 10px auto 0;
+         color: var(--muted);
+         font-size: 17px;
+      }
+
+      .chat-card {
+         flex: 1 1 auto;
+         display: flex;
+         flex-direction: column;
+         min-height: 0;
+         overflow: hidden;
+         border: 1px solid var(--line);
+         border-radius: 20px;
+         background: var(--surface);
+         box-shadow: 0 4px 18px rgba(31, 30, 29, .045);
+      }
+
+      .setup {
+         padding: 20px 22px 16px;
+         border-bottom: 1px solid var(--line);
+      }
+
+      .setup label {
+         display: flex;
+         align-items: baseline;
+         gap: 8px;
+         color: var(--ink);
+         font-size: 28px;
+         font-weight: 600;
+      }
+
+      .setup label span {
+         color: var(--stone);
+         font-size: 24px;
+         font-weight: 400;
+      }
+
+      input {
+         width: 100%;
+         min-width: 0;
+         margin: 7px 0 0;
+         padding: 11px 14px;
+         border: 1px solid #ddd7ca;
+         border-radius: 9px;
+         background: var(--ivory);
+         color: var(--ink);
+         font-family: inherit;
+         font-size: 30px;
+         line-height: 1.4;
+      }
+
+      input::placeholder {
+         color: #9a958a;
+      }
+
+      input:focus-visible {
+         outline: 2px solid #e3a98f;
+         outline-offset: 2px;
+      }
+
+      input#apiKey {
+         -webkit-text-security: disc;
+      }
+
+      .conversation-heading {
+         display: flex;
+         align-items: center;
+         justify-content: space-between;
+         gap: 12px;
+         padding: 15px 22px;
+         border-bottom: 1px solid var(--line);
+      }
+
+      .conversation-heading h2 {
+         margin: 0;
+         font-size: 32px;
+         font-weight: 600;
+      }
+
+      .memory-status {
+         display: inline-flex;
+         align-items: center;
+         gap: 7px;
+         color: var(--stone);
+         font-size: 26px;
+      }
+
+      .memory-status::before {
+         width: 7px;
+         height: 7px;
+         border-radius: 50%;
+         background: var(--terra);
+         content: '';
+      }
+
+      #chatContainer {
+         height: auto;
+         min-height: 0;
+         flex: 1 1 auto;
+         margin: 0;
+         padding: 22px;
+         overflow-y: auto;
+         border: 0;
+         border-radius: 0;
+         background: var(--surface);
+      }
+
+      #messages {
+         display: flex;
+         flex-direction: column;
+         gap: 10px;
+      }
+
+      .message {
+         display: block;
+         max-width: min(78%, 680px);
+         min-height: 0;
+         margin: 0;
+         padding: 12px 16px;
+         border: 1px solid transparent;
+         border-radius: 16px;
+         white-space: pre-wrap;
+         overflow-wrap: anywhere;
+         line-height: 1.55;
+         font-size: 30px;
+      }
+
+      .message.user {
+         margin-left: auto;
+         background: #f4e5de;
+         color: var(--ink);
+      }
+
+      .message.assistant {
+         margin-right: auto;
+         border-color: var(--line);
+         background: var(--ivory);
+         color: var(--ink);
+      }
+
+      .message.loading {
+         color: var(--stone);
+         font-style: italic;
+      }
+
+      #inputContainer {
+         flex: 0 0 auto;
+         display: flex;
+         gap: 9px;
+         margin: 0;
+         padding: 15px 22px 20px;
+         border-top: 1px solid var(--line);
+         background: #fdfcf9;
+      }
+
+      #messageInput {
+         flex: 1;
+         margin: 0;
+         padding: 11px 14px;
+      }
+
+      button {
+         min-height: 42px;
+         padding: 9px 17px;
+         border: 1px solid #c9583a;
+         border-radius: 8px;
+         background: var(--terra);
+         color: var(--ivory);
+         font: 500 30px/1.2 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+         cursor: pointer;
+         transition: background .15s, border-color .15s, color .15s;
+      }
+
+      button:hover {
+         border-color: #b8563a;
+         background: var(--terra-dark);
+      }
+
+      button:focus-visible {
+         outline: 2px solid #e3a98f;
+         outline-offset: 2px;
+      }
+
+      #inputContainer #clearBtn {
+         border: 1px solid #ddd7ca;
+         background: var(--ivory) !important;
+         color: #3d3d3a;
+      }
+
+      #inputContainer #clearBtn:hover {
+         border-color: #cfc8ba;
+         background: var(--sand) !important;
+      }
+
+      @media (max-width: 640px) {
+         body {
+            width: min(calc(100% - 24px), 1040px);
+            padding: 12px 0 14px;
+         }
+
+         .lede {
+            font-size: 15px;
+         }
+
+         .page-heading {
+            margin-bottom: 10px;
+         }
+
+         .setup,
+         .conversation-heading {
+            padding-right: 15px;
+            padding-left: 15px;
+         }
+
+         #chatContainer {
+            padding: 16px 13px;
+         }
+
+         .conversation-heading {
+            flex-wrap: wrap;
+            row-gap: 2px;
+         }
+
+         .message {
+            max-width: 90%;
+            padding: 10px 13px;
+         }
+
+         #inputContainer {
+            flex-wrap: wrap;
+            padding: 13px 15px 16px;
+         }
+
+         #messageInput {
+            flex-basis: 100%;
+         }
+
+         #inputContainer button {
+            flex: 1;
+         }
+      }
+   </style>
 </head>
 
 <body>
-   <h1>OpenRouter API in Browser</h1>
-   <input type="text" id="apiKey" placeholder="Enter your OpenRouter API key">
+   <header class="page-heading">
+      <p class="eyebrow">04 · Stateful conversations</p>
+      <h1>Chat with memory</h1>
+      <h2 style="font-size: x-large;">The browser keeps the conversation and sends its history with each request, <br>so
+         the
+         model can follow along.
+      </h2>
+   </header>
 
-   <div id="chatContainer">
-      <div id="messages"></div>
-   </div>
-
-   <div id="inputContainer">
-      <input type="text" id="messageInput" placeholder="Type your message..." value="Capital of England?">
-      <button id="sendBtn">Send</button>
-      <button id="clearBtn" style="background: #dc3545;">Clear Chat</button>
-   </div>
+   <main class="chat-card" aria-label="Chat with memory demo">
+      <section class="setup" aria-label="API setup">
+         <label for="apiKey">OpenRouter API key <span>masked on screen</span></label>
+         <input type="text" id="apiKey" placeholder="Enter your OpenRouter API key" autocomplete="off"
+            aria-label="OpenRouter API key">
+      </section>
+      <div class="conversation-heading">
+         <h2>Conversation</h2>
+         <span class="memory-status">Saved in this browser</span>
+      </div>
+      <div id="chatContainer" aria-live="polite" aria-label="Conversation messages">
+         <div id="messages"></div>
+      </div>
+      <div id="inputContainer">
+         <input type="text" id="messageInput" placeholder="Type your message..." value="Capital of England?"
+            aria-label="Message">
+         <button id="sendBtn" type="button">Send</button>
+         <button id="clearBtn" type="button">Clear chat</button>
+      </div>
+   </main>
 
    <script>
       // 🚀 ======================= DEMO CONSOLE LOGGING =======================
