@@ -12,19 +12,200 @@
       rel="stylesheet">
    <link rel="stylesheet" href="01-style.css">
    <script src="config.js"></script>
+   <style>
+      :root {
+         --paper: #f0eee6;
+         --surface: #fbfaf7;
+         --ivory: #fffdfa;
+         --ink: #1f1e1d;
+         --muted: #55524c;
+         --stone: #8c877c;
+         --line: #e2ddd2;
+         --terra: #d97757;
+         --terra-dark: #c9633f;
+      }
+
+      * {
+         box-sizing: border-box;
+         font-family: -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+         font-size: 16px;
+      }
+
+      body {
+         width: min(900px, calc(100% - 40px));
+         max-width: none;
+         margin: 0 auto;
+         padding: 42px 0 56px;
+         color: var(--ink);
+         background: var(--paper);
+         font: 16px/1.55 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+      }
+
+      h1 {
+         margin: 0 0 28px;
+         text-align: center;
+         font: 500 clamp(34px, 5vw, 48px)/1.12 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+         letter-spacing: -.035em;
+      }
+
+      body > input {
+         display: block;
+         width: 100%;
+         min-width: 0;
+         margin: 0 0 12px;
+         padding: 12px 15px;
+         border: 1px solid #ddd7ca;
+         border-radius: 10px;
+         background: var(--ivory);
+         color: var(--ink);
+         font: inherit;
+      }
+
+      #apiKey {
+         -webkit-text-security: disc;
+      }
+
+      body > input:focus-visible {
+         outline: 2px solid #e3a98f;
+         outline-offset: 2px;
+      }
+
+      button {
+         min-height: 44px;
+         padding: 10px 18px;
+         border: 1px solid #c9583a;
+         border-radius: 8px;
+         background: var(--terra);
+         color: var(--ivory);
+         font: 500 16px/1.2 -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif;
+         cursor: pointer;
+         transition: background .15s, border-color .15s;
+      }
+
+      button:hover {
+         border-color: #b8563a;
+         background: var(--terra-dark);
+      }
+
+      button:focus-visible {
+         outline: 2px solid #e3a98f;
+         outline-offset: 2px;
+      }
+
+      body > br {
+         display: none;
+      }
+
+      #result {
+         min-height: 150px;
+         margin-top: 20px;
+         padding: 20px;
+         border: 1px solid var(--line);
+         border-radius: 16px;
+         background: var(--surface);
+         color: var(--ink);
+      }
+
+      .explain {
+         margin: 12px 0;
+         padding: 14px 16px;
+         border-left: 4px solid var(--terra);
+         border-radius: 8px;
+         background: #f7e7e0;
+         color: #3d3d3a;
+         font: inherit;
+      }
+
+      .explain .badge {
+         display: inline-block;
+         margin-right: 8px;
+         padding: 3px 9px;
+         border-radius: 999px;
+         background: var(--terra);
+         color: var(--ivory);
+         font-size: 12px;
+         font-weight: 700;
+         letter-spacing: .06em;
+      }
+
+      .explain .summary {
+         color: var(--ink);
+         font-weight: 650;
+      }
+
+      .explain .detail {
+         margin-top: 7px;
+         color: var(--muted);
+         line-height: 1.55;
+      }
+
+      .explain code {
+         padding: 1px 5px;
+         border-radius: 4px;
+         background: rgba(255, 253, 250, .75);
+         font: .9em 'JetBrains Mono', monospace;
+      }
+
+      details.raw {
+         margin: 12px 0;
+         overflow: hidden;
+         border: 1px solid #48453f;
+         border-radius: 9px;
+         background: #272521;
+      }
+
+      details.raw > summary {
+         padding: 10px 13px;
+         color: #f0b49a;
+         font: 14px/1.4 'JetBrains Mono', monospace;
+         cursor: pointer;
+      }
+
+      details.raw > pre {
+         margin: 0;
+         padding: 14px;
+         overflow: auto;
+         border-top: 1px solid #48453f;
+         background: #1f1e1d;
+         color: #f3eee5;
+         font: 13px/1.5 'JetBrains Mono', monospace;
+         white-space: pre-wrap;
+         overflow-wrap: anywhere;
+      }
+
+      @media (max-width: 640px) {
+         body {
+            width: calc(100% - 24px);
+            padding: 28px 0 36px;
+         }
+
+         #result {
+            padding: 14px;
+         }
+      }
+   </style>
+   <link rel="stylesheet" href="anthropic-ui.css">
 </head>
 
 <body>
-   <h1>OpenRouter API in Browser</h1>
-   <input type="text" id="apiKey" placeholder="Enter your OpenRouter API key" value="" autocomplete="off"
-      data-form-type="other">
-   <input type="text" id="prompt" placeholder="Enter your prompt" value="When was the first meetup held?"
-      autocomplete="off">
+   <header class="page-heading">
+      <p class="eyebrow">02 · Retrieval augmented generation</p>
+      <h1>OpenRouter API + RAG</h1>
+      <p class="lede">Add retrieved facts to the prompt so the model can answer with fresh context.</p>
+   </header>
 
-   <button id="sendBtn" type="button">Send Request</button>
-
-   <br>
-   <div id="result"></div>
+   <main class="chat-card" aria-label="Retrieval augmented generation demo">
+      <section class="setup" aria-label="Request setup">
+         <label for="apiKey">OpenRouter API key <span>masked on screen</span></label>
+         <input type="text" id="apiKey" placeholder="Enter your OpenRouter API key" value="" autocomplete="off"
+            data-form-type="other">
+         <label for="prompt">Question</label>
+         <input type="text" id="prompt" placeholder="Enter your prompt" value="When was the first meetup held?"
+            autocomplete="off">
+         <button id="sendBtn" type="button">Send Request</button>
+      </section>
+      <div id="result" aria-live="polite" aria-label="Request and response details"></div>
+   </main>
 
    <script>
       // 🚀 ======================= DEMO CONSOLE LOGGING =======================
