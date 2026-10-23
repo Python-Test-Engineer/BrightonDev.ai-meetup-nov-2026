@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Calling ELI5</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .slide {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            max-width: 1400px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 3em;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .diagram {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            margin: 40px 0;
+            gap: 20px;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .icon {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3em;
+            color: white;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            flex-shrink: 0;
+        }
+
+        .arrow {
+            font-size: 3em;
+            color: #667eea;
+            flex: 0;
+            align-self: flex-start;
+            margin-top: 50px;
+        }
+
+        .step-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .step-desc {
+            color: #666;
+            font-size: 1.4rem;
+            line-height: 1.4;
+        }
+
+        .example {
+            background: #f8f9ff;
+            border-left: 4px solid #667eea;
+            padding: 25px;
+            margin-top: 40px;
+            border-radius: 10px;
+        }
+
+        .example-title {
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .example-step {
+            margin: 10px 0;
+            padding-left: 20px;
+            color: #444;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="slide">
+        <h1>🛠️ Tool Calling (ELI5)</h1>
+
+        <div class="diagram">
+            <div class="step">
+                <div class="icon">👤</div>
+                <div class="step-title">You Ask</div>
+                <div class="step-desc">"What's the weather today?"</div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="icon">🤖</div>
+                <div class="step-title">AI Searches Tools</div>
+                <div class="step-desc">It finds the get_weather() tool and then responds with a request for us to run
+                    this function.</div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="icon">🔧</div>
+                <div class="step-title">Tool Responds</div>
+                <div class="step-desc">Sends this result in a second prompt: "72°F and sunny"</div>
+            </div>
+
+            <div class="arrow">→</div>
+
+            <div class="step">
+                <div class="icon">💬</div>
+                <div class="step-title">AI Answers</div>
+                <div class="step-desc">"It's 72 degrees and sunny today!"</div>
+            </div>
+        </div>
+
+
+    </div>
+</body>
+
+</html>

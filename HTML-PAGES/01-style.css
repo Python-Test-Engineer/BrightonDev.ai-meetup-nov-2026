@@ -1,0 +1,156 @@
+* {
+   font-family: 'Raleway', sans-serif;
+   font-size: 20px;
+}
+
+body {
+   font-family: 'Raleway', sans-serif;
+   max-width: 800px;
+   margin: 50px auto;
+   font-size: 20px;
+}
+
+input {
+   width: 100%;
+   padding: 10px;
+   margin: 10px 0;
+}
+
+/* API key field: mask the value as bullets so it can't be read off the screen
+   during the talk. Native -webkit-text-security (Chrome/Edge/Safari) renders the
+   value like a password field; the placeholder stays readable. Unsupported
+   browsers fall back to plain text. */
+input#apiKey {
+   -webkit-text-security: disc;
+}
+
+button {
+   padding: 10px 20px;
+   background: #007bff;
+   color: white;
+   border: none;
+   cursor: pointer;
+}
+
+button:hover {
+   background: #0056b3;
+}
+
+#chatContainer {
+   margin-top: 20px;
+   height: 600px;
+   overflow-y: auto;
+   border: 4px solid #6c757d;
+   border-radius: 15px;
+   padding: 15px;
+   background: #e5ddd5;
+   background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iYSIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIj48cGF0aCBkPSJtMCAwaDQwdjQwSDB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTAgMGwyMCAyMHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2Y1ZjVmNSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2EpIi8+PC9zdmc+');
+}
+
+.message {
+   margin: 5px 0;
+   padding: 8px 12px;
+   border-radius: 18px;
+   max-width: 60%;
+   word-wrap: break-word;
+   display: flex;
+   align-items: center;
+   min-height: 36px;
+}
+
+.message.user {
+   background: #dcf8c6;
+   color: #303030;
+   margin-left: auto;
+   justify-content: flex-end;
+}
+
+.message.assistant {
+   background: white;
+   color: #303030;
+   margin-right: auto;
+}
+
+#inputContainer {
+   margin-top: 20px;
+   display: flex;
+}
+
+#inputContainer input {
+   flex: 1;
+   margin-right: 10px;
+}
+
+#inputContainer button {
+   padding: 10px 20px;
+}
+
+#result {
+   margin-top: 20px;
+   padding: 15px;
+   background: #bcbeb6;
+   border-radius: 5px;
+   border: 4px solid #6c757d;
+   min-height: 100px;
+}
+
+/* ─── Audience-facing narration & raw payload styles (shared by all demos) ─── */
+.explain {
+   background: #eef7fb;
+   border-left: 4px solid #0097a7;
+   font-family: 'Raleway', sans-serif;
+   font-size: 18px;
+   color: #0d3b42;
+   border-radius: 5px;
+   padding: 12px;
+   margin: 10px 0;
+}
+.explain .badge {
+   display: inline-block;
+   background: #0097a7;
+   color: white;
+   border-radius: 4px;
+   padding: 1px 8px;
+   margin-right: 8px;
+   font-weight: 700;
+   font-size: 14px;
+   letter-spacing: 0.5px;
+}
+.explain .summary {
+   font-weight: 700;
+   display: block;
+   margin-top: 4px;
+}
+.explain .detail {
+   color: #276a73;
+   margin-top: 6px;
+   line-height: 1.5;
+}
+/* Dark monospace code block for raw payloads */
+details.raw {
+   margin: 8px 0 4px;
+   border: 1px solid #cde;
+   border-radius: 4px;
+   background: #1e242b;
+}
+details.raw > summary {
+   cursor: pointer;
+   padding: 8px 12px;
+   color: #7fd4e8;
+   font-family: 'JetBrains Mono', monospace;
+   font-size: 14px;
+   user-select: none;
+}
+details.raw > pre {
+   margin: 0;
+   padding: 12px;
+   background: #14181d;
+   color: #9ce3b5;
+   font-family: 'JetBrains Mono', monospace;
+   font-size: 13px;
+   line-height: 1.5;
+   white-space: pre-wrap;
+   word-break: break-word;
+   border-top: 1px solid #2c353f;
+   border-radius: 0 0 4px 4px;
+}

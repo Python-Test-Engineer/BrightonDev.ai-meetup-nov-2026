@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agents — Demystified and Simplified</title>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --bg-soft: #f2efe8;
+      --card: #ffffff;
+      --border: #e6e2d8;
+      --border-strong: #d8d3c6;
+      --ink: #262625;
+      --muted: #6e6d68;
+      --faint: #8f8d86;
+      --clay: #c14f31;
+      --clay-strong: #a03b22;
+      --clay-soft: #f0ded6;
+      --rust: #d97757;
+      --code-bg: #1f1e1d;
+      --code-ink: #f0eee6;
+      --code-muted: #8f8c84;
+      --radius: 14px;
+      --serif: "Georgia", "Times New Roman", "Iowan Old Style", serif;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: "SFMono-Regular", ui-monospace, Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: linear-gradient(180deg, #f7f4ec 0%, var(--bg) 320px);
+      color: var(--ink);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      font-size: 32px;
+    }
+
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 48px 120px;
+    }
+
+    @media (max-width: 640px) {
+      .wrap {
+        padding: 0 20px 90px;
+      }
+    }
+
+    /* ---------- nav ---------- */
+    nav.top {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      flex-wrap: nowrap;
+      gap: 4px;
+      background: rgba(250, 249, 245, .92);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 28px;
+    }
+
+    nav.top .brand {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--clay-strong);
+      margin-right: 18px;
+      white-space: nowrap;
+    }
+
+    nav.top a {
+      font-family: var(--mono);
+      font-size: 16px;
+      letter-spacing: .5px;
+      color: var(--muted);
+      padding: 7px 12px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    nav.top a:hover {
+      color: var(--clay-strong);
+      background: var(--clay-soft);
+      text-decoration: none;
+    }
+
+    nav.top a .n {
+      color: var(--clay);
+      margin-right: 5px;
+    }
+
+    /* anchors land clear of the fixed nav */
+    section {
+      scroll-margin-top: 72px;
+    }
+
+    /* ---------- hero ---------- */
+    header.hero {
+      padding-top: 150px;
+      text-align: center;
+      position: relative;
+    }
+    .eyebrow {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 24px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--clay-strong);
+      border: 1.5px solid var(--clay);
+      background: var(--clay-soft);
+      padding: 10px 24px;
+      border-radius: 999px;
+      margin-bottom: 34px;
+      font-weight: 600;
+    }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(54px, 8vw, 92px);
+      line-height: 1.06;
+      font-weight: 500;
+      letter-spacing: -1.5px;
+      margin-bottom: 26px;
+    }
+
+    h1 .grad {
+      background: linear-gradient(100deg, var(--clay) 0%, var(--rust) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-style: italic;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 27px;
+      max-width: 720px;
+      margin: 0 auto 10px;
+    }
+
+    .github-url {
+      color: var(--muted);
+      font-size: 22px;
+      margin-top: 6px;
+    }
+
+    .author {
+      color: var(--muted);
+      font-size: 22px;
+    }
+
+    .author b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* ---------- sections ---------- */
+    section {
+      margin-top: 96px;
+    }
+
+    h2 {
+      font-family: var(--serif);
+      font-size: clamp(38px, 5vw, 52px);
+      font-weight: 500;
+      letter-spacing: -0.75px;
+      margin-bottom: 28px;
+      padding-top: 8px;
+      line-height: 1.15;
+    }
+
+    h2 .num {
+      color: var(--clay);
+      font-family: var(--mono);
+      font-size: .62em;
+      font-weight: 600;
+      margin-right: 18px;
+      letter-spacing: 0;
+      vertical-align: 3px;
+    }
+
+    h3 {
+      font-family: var(--serif);
+      font-size: 33px;
+      font-weight: 600;
+      margin: 46px 0 14px;
+      color: var(--clay-strong);
+    }
+
+    p {
+      margin-bottom: 16px;
+      color: var(--ink);
+    }
+
+    p.muted {
+      color: var(--muted);
+    }
+
+    strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    a {
+      color: var(--clay);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: .82em;
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 7px;
+      color: var(--clay-strong);
+    }
+
+    /* ---------- cards ---------- */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 1px 2px rgba(38, 38, 37, .04);
+      padding: 30px 32px;
+      margin: 26px 0;
+    }
+
+    .card.quote {
+      border-left: 4px solid var(--clay);
+      font-style: italic;
+      color: var(--ink);
+      font-size: 26px;
+    }
+
+    .card.quote strong {
+      font-style: normal;
+    }
+
+    .card.note {
+      background: linear-gradient(180deg, #fbf7f2, #f7efe8);
+      border-color: var(--clay-soft);
+    }
+
+    .card.note .tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 17px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--clay);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    /* ---------- lists ---------- */
+    ol,
+    ul {
+      margin: 0 0 20px 22px;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    .building-blocks {
+      list-style: none;
+      margin-left: 0;
+    }
+
+    .building-blocks li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(38, 38, 37, .04);
+    }
+
+    .building-blocks li b {
+      color: var(--clay-strong);
+    }
+
+    /* ---------- images ---------- */
+    figure {
+      margin: 26px 0;
+      text-align: center;
+    }
+
+    figure img {
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+
+    figure.fig-left img {
+      width: 300px;
+    }
+
+    figure.fig-med img {
+      width: 400px;
+    }
+
+    figure.fig-wide img {
+      width: 100%;
+    }
+
+    figure.fig-api img {
+      width: 100%;
+    }
+
+    figure.fig-qr img {
+      width: 340px;
+    }
+
+    figcaption {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 22px;
+      font-style: italic;
+    }
+
+    .img-row {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .img-row figure {
+      margin: 10px 0;
+    }
+
+    .img-row img {
+      width: 300px;
+    }
+
+    /* ---------- code ---------- */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid #2c2a28;
+      border-radius: 12px;
+      padding: 18px 22px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 24px;
+      color: var(--code-ink);
+      margin: 20px 0;
+      line-height: 1.6;
+    }
+
+    pre .c {
+      color: var(--code-muted);
+      font-style: italic;
+    }
+
+    /* ---------- build blocks ---------- */
+    .demos {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+
+    .demo {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .demo .step {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--clay);
+      border: 1px solid var(--clay-soft);
+      background: rgba(193, 79, 49, .05);
+      padding: 5px 13px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+
+    .demo h4 {
+      font-family: var(--serif);
+      font-size: 34px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    /* ---------- footer ---------- */
+    footer {
+      margin-top: 110px;
+      padding-top: 40px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .repo-btn {
+      display: inline-block;
+      margin: 10px 0 24px;
+      padding: 14px 28px;
+      background: var(--clay);
+      color: #fff;
+      font-weight: 600;
+      border-radius: 999px;
+      text-decoration: none;
+      transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+
+    .repo-btn:hover {
+      transform: translateY(-2px);
+      background: var(--clay-strong);
+      box-shadow: 0 10px 30px rgba(193, 79, 49, .28);
+      text-decoration: none;
+    }
+
+    .divider {
+      margin: 80px auto;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
+      border: 0;
+    }
+
+    /* ---------- lightbox ---------- */
+    figure img {
+      cursor: zoom-in;
+      transition: filter .15s ease;
+    }
+
+    figure img:hover {
+      filter: brightness(1.03) contrast(1.02);
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(20, 19, 18, .9);
+      padding: 0;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity .2s ease, visibility .2s ease;
+      cursor: zoom-out;
+    }
+
+    .lightbox.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .lightbox .lb-stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      width: 100%;
+      height: 100%;
+      padding: 40px;
+    }
+
+    .lightbox .lb-stage img {
+      object-fit: contain;
+      background: transparent;
+      transform: scale(.96);
+      transition: transform .2s ease;
+    }
+
+    .lightbox.open .lb-stage img {
+      transform: scale(1);
+    }
+
+    .lightbox .lb-stage.single {
+      padding: 0;
+      gap: 0;
+    }
+
+    .lightbox .lb-stage.single img {
+      width: 100%;
+      height: 100%;
+    }
+
+    .lightbox .lb-stage.multi {
+      padding: 0 40px;
+    }
+
+    .lightbox .lb-stage.multi img {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 100%;
+      max-width: calc(50% - 8px);
+    }
+
+    .lightbox .lb-close {
+      position: absolute;
+      top: 20px;
+      right: 26px;
+      z-index: 3;
+      width: 52px;
+      height: 52px;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .12);
+      color: #fff;
+      font-size: 34px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s ease;
+    }
+
+    .lightbox .lb-close:hover {
+      background: rgba(255, 255, 255, .25);
+    }
+
+    .lightbox .lb-caption {
+      position: absolute;
+      bottom: 24px;
+      left: 0;
+      right: 0;
+      z-index: 3;
+      text-align: center;
+      color: rgba(255, 255, 255, .7);
+      font-size: 20px;
+      font-style: italic;
+      padding: 0 40px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="top">
+    <span class="brand">BrightonDev.ai</span>
+    <a href="#pitch"><span class="n">01</span>Pitch</a>
+    <a href="#moment"><span class="n">02</span>Moment</a>
+    <a href="#blocks"><span class="n">03</span>Building blocks</a>
+    <a href="#demos"><span class="n">04</span>Demos</a>
+    <a href="#engineering"><span class="n">05</span>Engineering</a>
+    <a href="#leave"><span class="n">06</span>Leave-behinds</a>
+  </nav>
+
+  <header class="hero">
+    <span class="eyebrow">BrightonDev.ai Meetup</span>
+    <h1>AI Agents<br><span class="grad">Demystified</span> and Simplified</h1>
+    <p class="sub">A BrightonDev.ai Meetup talk by <span class="author"><b>Craig West</b></span></p>
+    <p class="author">All code, slides and more in the repo below.</p>
+    <figure class="fig-qr">
+      <img src="./qr.png" alt="QR code linking to the GitHub repo">
+    </figure>
+
+    <p>
+      <a class="repo-btn" href="https://github.com/Python-Test-Engineer/BrightonDevAI-meetup-nov-2026" target="_blank"
+        rel="noopener">
+        github.com/Python-Test-Engineer/BrightonDevAI-meetup-nov-2026
+      </a>
+    </p>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ============ PITCH ============ -->
+    <section id="pitch">
+      <h2><span class="num">01</span>The one-line pitch</h2>
+      <p><strong>AI Agents are just code making a REST API call</strong> — admittedly, a very magical API. Pull away the
+        hype and an agent is a <code>fetch</code> (a POST request with a JSON payload) wrapped in a loop, with some
+        history and some tools bolted on.</p>
+      <p>That's it.</p>
+      <p>This whole talk is about demystifying and simplifying AI agents.</p>
+
+      <figure class="fig-api">
+        <img src="./01-REST-API.png" alt="A fetch to the API with a payload">
+      </figure>
+
+      <div class="card note">
+        <span class="tag">The image of the night</span>
+        <p style="margin:0">This snippet — a <code>fetch</code> to the API with a payload — is the single most important
+          image of the night. </p>
+        <p>Read it as one POST request: you send the model's rules and the user's question as a JSON
+          body, and it answers.</p>
+      </div>
+
+      <p>My goal tonight is not to teach you a framework. It's to <strong>demystify and simplify</strong> — to show you
+        the patterns and the structure, not the library details — so that when you go home you can build your own agent,
+        or plug agents into the workflows you already have. Business as usual.</p>
+      <br><br><br><br><br><br><br><br>
+      <div class="card quote">
+        <p style="margin:0">I'm Craig West — one of you, a developer — and when
+          I'm not wrestling with agents you'll find me walking a Fox Red Labrador (Leo) and a Cockapoo (Pip).</p>
+
+        <figure class="fig-left">
+          <img src="./images/leo-and-pip-stairs.jpeg" alt="Leo and Pip on the stairs">
+        </figure>
+
+
+        <p style="margin:0">We even have a local red fox that follows us on the walks. The dogs and the fox have more
+          patience with me than my code does, most days.</p>
+        <figure class="fig-med">
+          <img src="./images/leo-fox-daylight-2.png" alt="Leo and the fox in daylight">
+        </figure>
+        <p>I started out many years ago as a developer and SQL DBA, working through JS and Python frameworks to ML/AI.
+        </p>
+      </div>
+    </section>
+    <br><br><br><br><br><br><br><br>
+    <hr class="divider">
+
+    <!-- ============ MOMENT ============ -->
+    <section id="moment">
+      <h2><span class="num">02</span>My take on the AI agent moment</h2>
+
+      <p>Three things were on my mind as I put this talk together:</p>
+      <ol>
+        <li><strong>Client-side control.</strong> Instead of a server team pre-building every endpoint, <em>we</em>
+          create the endpoint on the client side, at runtime, as we go.</li>
+        <li><strong>Natural language as the interface.</strong> We write the request in Natural Language - in this case
+          English.</li>
+        <li><strong>Autonomy.</strong> The LLM decides the flow. The model chooses what to do next, not us, within
+          certain constraints.</li>
+      </ol>
+      <p>As a talk member once said "This is very underwhelming." </p>
+      <p>I took it as a compliment.</p>
+
+      <h3>The upside-down mouse</h3>
+      <p>Here's the image I keep coming back to. Picture an upside-down computer mouse. When you pick one up the wrong
+        way round, it's disorienting — but it's the <em>same</em> set of movements. Left, right, up, down. Just
+        reversed. It takes a while to retrain your hand, but you already know how to do the motions.</p>
+      <div class="img-row">
+        <figure><img src="./images/mouse-up.jpg" alt="Mouse the right way up"></figure>
+        <figure><img src="./images/mouse-down.jpg" alt="Upside-down mouse"></figure>
+      </div>
+      <p>Agentic AI is the upside-down mouse. The concepts are familiar — request, response, context, functions, loops.
+        We've just got to flip how we think about who's in charge.</p>
+    </section>
+
+    <hr class="divider">
+    <br><br><br><br><br><br><br><br>
+    <!-- ============ BUILDING BLOCKS ============ -->
+    <section id="blocks">
+      <h2><span class="num">03</span>History · Context · Looping · Tools</h2>
+      <p>I keep four words pinned to the front of my mind, because every agent, however fancy, is built from them:</p>
+      <ul class="building-blocks">
+        <li><b>Looping</b> — repeat the call until the model decides it has a final answer.</li>
+        <li><b>Context</b> — give it the facts it needs, either statically or fetched dynamically.</li>
+        <li><b>Tools</b> — runtime functions it can reach for when it needs to do something or get more information.
+        <li><b>History</b> — the model is stateless at its core, so we give it memory by feeding back previous
+          exchanges.</li>
+        </li>
+      </ul>
+      <p>Everything below is just one of these four ideas wearing a different coat.</p>
+
+      <h3>Function composition is not new</h3>
+      <p>For me the cleanest mental model is the <code>function</code> frame:</p>
+      <pre>input -&gt; function(input) -&gt; output -&gt; function(output) -&gt; output2</pre>
+      <figure class="fig-wide">
+        <img src="./images/  <figure class=" fig-wide">
+        <img src="./images/100_INPUT_OUTPUT.png"
+          alt="Reflection pattern — the output of one agent becomes the input of the next">
+      </figure>
+      </figure>
+
+    </section>
+    <br><br><br><br><br><br><br><br>
+    <hr class="divider">
+
+    <!-- ============ DEMOS ============ -->
+    <section id="demos">
+      <h2><span class="num">04</span>Progression through the demos</h2>
+      <p>I've written four tiny HTML pages — each one is just a <code>&lt;script&gt;</code> with a <code>fetch</code>.
+        No build step, no framework, no SDK. They step up from "nothing" to "an agent," and each one adds one more of
+        the four building blocks.</p>
+
+      <div class="demos">
+
+        <div class="demo">
+          <span class="step">Demo 1 · Stateless</span>
+          <h4>The basic call</h4>
+          <p>The very first page sends ONE prompt to OpenRouter and prints the answer. Under the hood it's a
+            <code>system</code> message (rules and personality) plus a <code>user</code> message, POSTed over HTTPS.
+          </p>
+          <p>This is the whole magic trick, unwrapped. No state. Every click is a brand new conversation as far as the
+            model is concerned. If I button-mash this page, the AI cannot remember what I said a second ago — because
+            the API doesn't store anything.</p>
+          <div class="card note">
+            <span class="tag">Takeaway</span>
+            <p style="margin:0">This snippet — a <code>fetch</code> with a payload — is the most important takeaway of
+              the whole night. Everything else tonight hangs a harness around this line.</p>
+          </div>
+
+          <figure class="fig-wide">
+            <img src="./images/email01-basic-request.png" alt="Demo 1 screenshot — the basic stateless call">
+          </figure>
+        </div>
+
+        <div class="demo">
+          <span class="step">Demo 2 · Adding Context</span>
+          <h4>RAG</h4>
+          <p>Still one call. But now I glue extra facts into the system prompt — facts the model was never trained on
+            ("the meetup is..."). This is Retrieval-Augmented Generation in
+            its simplest form: <strong>bake the facts in before you ask.</strong></p>
+          <p>It can be dynamic, too. That block of context normally comes from a database, an API, or a vector search.
+            But the recipe never changes — retrieve the facts, stuff them in the prompt, ask. Context engineering, done.
+          </p>
+
+          <figure class="fig-wide">
+            <img src="./images/email03-with-context.png" alt="Demo 2 screenshot — adding context (RAG)">
+          </figure>
+        </div>
+
+        <div class="demo">
+          <span class="step">Demo 3 · Tools + a Loop</span>
+          <h4>Tool calling</h4>
+          <p>Now it gets interesting. This page describes two tools to the model, <code>get_weather</code> and
+            <code>get_sum</code>, using JSON — <strong>name, description, parameter schema</strong>. Crucially, the
+            model never runs them. It only <em>asks</em>: "call this tool, with these arguments." My code does the
+            actual execution via a <code>switch</code> (no magic), then hands the result back into the conversation.
+          </p>
+          <p>And here's the shift: <strong>this is the agent loop.</strong> The loop keeps running while the model asks
+            for tools and stops when it decides it has a final answer (with a max-iteration guard so we never loop
+            forever). The model directs the flow. That's the autonomy point from earlier.</p>
+
+          <figure class="fig-wide">
+            <img src="./images/email04-tool-calling.png" alt="Demo 3 screenshot — tool calling and the agent loop">
+          </figure>
+        </div>
+
+        <div class="demo">
+          <span class="step">Demo 4 · Adding History</span>
+          <h4>Memory</h4>
+          <p>Last building block. Same single <code>fetch</code>, but now we keep the whole conversation in
+            <code>messages</code> and <strong>resend all of it every call</strong>. That's all "memory" is — you replay
+            the tape back into the model each time. And because it's a browser, we persist it to
+            <code>localStorage</code>, so a refresh keeps the chat.
+          </p>
+          <p>The honest cost is right in the console: more history = more tokens = more money. Memory engineering is
+            really token budget management.</p>
+
+          <figure class="fig-wide">
+            <img src="./images/email02-folow-up.png" alt="Demo 4 screenshot — adding history (memory)">
+          </figure>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ============ ENGINEERING ============ -->
+    <section id="engineering">
+      <h2><span class="num">05</span>PROMPT ENGINEERING → CONTEXT ENGINEERING → HARNESS ENGINEERING</h2>
+      <p>I want to end on the point that changed how I think.</p>
+      <p>Tools to build your own coding agent are not as scary as they sound. You need: list files, read a file, edit a
+        file, write a file — and honestly, <code>bash</code> alone is enough; it subsumes the rest.</p>
+      <p>The bigger idea though, the one I keep telling people:</p>
+      <div class="card quote">
+        <p style="margin:0"><strong>A harness with a lower model can outperform a higher model.</strong> Often it's the
+          harness — the loop, the context, the tools, the memory — that decides the outcome, not the raw intelligence of
+          the LLM.</p>
+      </div>
+      <p>That's liberating. It means the craft and the content of our jobs still matter. The engineering around the
+        model is what makes it sing. My minimal coding agent is just a loop that runs until it finds an answer — and
+        then I look back at the demo and think: everything we saw tonight was already there in miniature.</p>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ============ LEAVE-BEHINDS ============ -->
+    <section id="leave">
+      <h2><span class="num">06</span>Leave-behinds</h2>
+      <p>Everything tonight is in the repo — the HTML pages, the notes, links to the explainer videos, and my mini
+        coding-agent for you to fork and build on.</p>
+      <a class="repo-btn" href="https://github.com/Python-Test-Engineer/BrightonDevAI-meetup-nov-2026" target="_blank"
+        rel="noopener">
+        github.com/Python-Test-Engineer/BrightonDevAI-meetup-nov-2026
+      </a>
+      <p class="muted">Look at the patterns and the structure, not the code details. That is what got me through the
+        upside-down-mouse moment — and it's what turns "AI agents" from a different world back into just code.</p>
+    </section>
+
+    <footer>
+      <p>AI Agents — Demystified and Simplified · A BrightonDev.ai talk by Craig West</p>
+    </footer>
+
+  </main>
+
+  <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true">
+    <button class="lb-close" id="lbClose" aria-label="Close">&times;</button>
+    <div class="lb-stage single" id="lbStage"></div>
+    <div class="lb-caption" id="lbCaption"></div>
+  </div>
+
+  <script>
+    (function () {
+      var lb = document.getElementById('lightbox');
+      var lbStage = document.getElementById('lbStage');
+      var lbCaption = document.getElementById('lbCaption');
+
+      function open(items) {
+        lbStage.innerHTML = '';
+        lbStage.className = 'lb-stage ' + (items.length > 1 ? 'multi' : 'single');
+        var captionParts = [];
+        items.forEach(function (item) {
+          var el = document.createElement('img');
+          el.src = item.src;
+          el.alt = item.alt || '';
+          lbStage.appendChild(el);
+          if (item.caption) captionParts.push(item.caption);
+        });
+        lbCaption.textContent = captionParts.join('  ·  ');
+        lb.classList.add('open');
+        lb.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+
+      function close() {
+        lb.classList.remove('open');
+        lb.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+        setTimeout(function () { lbStage.innerHTML = ''; }, 200);
+      }
+
+      function itemFor(img) {
+        var fig = img.closest('figure');
+        var cap = fig ? fig.querySelector('figcaption') : null;
+        return {
+          src: img.currentSrc || img.src,
+          alt: img.alt,
+          caption: cap ? cap.textContent.trim() : (img.alt || '')
+        };
+      }
+
+      document.querySelectorAll('figure img').forEach(function (img) {
+        img.addEventListener('click', function () {
+          // Images grouped in an .img-row open together (e.g. the two mouse photos)
+          var row = img.closest('.img-row');
+          var source = row ? row.querySelectorAll('figure img') : [img];
+          var items = Array.prototype.map.call(source, itemFor);
+          open(items);
+        });
+      });
+
+      lb.addEventListener('click', function (e) {
+        if (lb.classList.contains('open')) close();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && lb.classList.contains('open')) close();
+      });
+    })();
+  </script>
+</body>
+
+</html>
