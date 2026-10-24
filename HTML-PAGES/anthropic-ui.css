@@ -371,7 +371,6 @@ details.raw>pre {
 
 /* 03.0-tool-call-anthropic-animation.html: page-specific styles */
 
-body.page-tool-animation,
 body.page-tool-animation {
    margin: 0;
    height: 100%;

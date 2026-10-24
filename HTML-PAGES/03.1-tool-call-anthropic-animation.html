@@ -311,6 +311,8 @@
     $('btnReset').addEventListener('click', reset);
     $('speed').addEventListener('change', e => { speed = Number(e.target.value); });
     document.addEventListener('keydown', e => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.target instanceof HTMLElement && e.target.matches('button, select, input, textarea, [contenteditable="true"]')) return;
       if (e.code === 'Space') { e.preventDefault(); play(); }
       else if (e.key === 'ArrowRight') nextStep();
       else if (e.key === 'r' || e.key === 'R') reset();
