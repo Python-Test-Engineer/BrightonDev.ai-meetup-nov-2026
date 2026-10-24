@@ -10,10 +10,13 @@
 
 <body class="page-tool-animation">
 
-  <div id="caption"><span id="capStep">Ready</span><span id="capText">Press Play to walk one tool call round trip
-      between the app and the model.</span></div>
+  <div id="caption">
+    <span id="capStep">Ready</span>
+    <p id="capLine"><strong id="capTitle">Press Play</strong><span id="capDesc">Walk one tool call round trip between
+        the app and the model.</span></p>
+  </div>
 
-  <svg id="stage" viewBox="0 0 1514 848" preserveAspectRatio="xMidYMid meet">
+  <svg id="stage" viewBox="68 52 1379 766" preserveAspectRatio="xMidYMid meet">
     <defs>
       <marker id="mR" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" markerUnits="strokeWidth"
         orient="auto">
@@ -177,14 +180,17 @@
     function showCaption(i) {
       if (i < 0) {
         $('capStep').textContent = 'Ready';
-        $('capText').textContent = 'Press Play to walk one tool call round trip between the app and the model.';
+        $('capTitle').textContent = 'Press Play';
+        $('capDesc').textContent = 'Walk one tool call round trip between the app and the model.';
       } else if (i >= STEPS.length) {
         $('capStep').textContent = 'Done';
-        $('capText').textContent = 'The model has its answer. The round trip is complete.';
+        $('capTitle').textContent = 'Round trip complete';
+        $('capDesc').textContent = 'The model has its answer.';
       } else {
         const s = STEPS[i];
         $('capStep').textContent = 'Step ' + s.n;
-        $('capText').textContent = s.title + ' — ' + s.desc;
+        $('capTitle').textContent = s.title;
+        $('capDesc').textContent = s.desc;
       }
     }
 
@@ -218,7 +224,12 @@
         place(s.x1, s.y);
         requestAnimationFrame(frame);
       }).then(() => {
-        if (t === token) pulse(BOX[s.to]);
+        if (t !== token) return;
+        pulse(BOX[s.to]);
+        // The tool only starts working once the call actually lands in it,
+        // and stops the moment the result pill lands back on the app.
+        if (s.to === 'tool') $('toolBox').classList.add('working');
+        else if (s.from === 'tool' && s.to === 'app') $('toolBox').classList.remove('working');
       });
     }
 
@@ -272,6 +283,7 @@
       busy = false;
       cur = 0;
       $('pkt').setAttribute('visibility', 'hidden');
+      $('toolBox').classList.remove('working');
       setStepUI(-1);
       showCaption(-1);
       updateButtons();
