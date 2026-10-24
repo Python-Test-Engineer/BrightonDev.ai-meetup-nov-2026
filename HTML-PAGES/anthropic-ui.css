@@ -506,7 +506,32 @@ body.page-tool-animation .pulse {
 body.page-tool-animation #sparkle {
    transform-box: fill-box;
    transform-origin: center;
-   animation: spin 18s linear infinite;
+}
+
+/* Model spark: idle until a pill lands on the model box, then it "thinks" */
+body.page-tool-animation #sparkle.thinking {
+   animation: sparkthink 2.4s linear infinite;
+   filter: drop-shadow(0 0 14px rgba(217, 119, 87, .55));
+}
+
+@keyframes sparkthink {
+   from {
+      transform: rotate(0deg) scale(1);
+   }
+
+   50% {
+      transform: rotate(180deg) scale(1.09);
+   }
+
+   to {
+      transform: rotate(360deg) scale(1);
+   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+   body.page-tool-animation #sparkle.thinking {
+      animation: none;
+   }
 }
 
 /* Connectors */

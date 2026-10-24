@@ -230,6 +230,10 @@
         // and stops the moment the result pill lands back on the app.
         if (s.to === 'tool') $('toolBox').classList.add('working');
         else if (s.from === 'tool' && s.to === 'app') $('toolBox').classList.remove('working');
+        // Same idea for the model: it thinks while a pill has just landed on it,
+        // and stops once its reply pill reaches the app.
+        if (s.to === 'model') $('sparkle').classList.add('thinking');
+        else if (s.from === 'model' && s.to === 'app') $('sparkle').classList.remove('thinking');
       });
     }
 
@@ -284,6 +288,7 @@
       cur = 0;
       $('pkt').setAttribute('visibility', 'hidden');
       $('toolBox').classList.remove('working');
+      $('sparkle').classList.remove('thinking');
       setStepUI(-1);
       showCaption(-1);
       updateButtons();
