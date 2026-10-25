@@ -118,6 +118,7 @@
       text-align: center;
       position: relative;
     }
+
     .eyebrow {
       display: inline-block;
       font-family: var(--mono);
@@ -303,6 +304,16 @@
 
     .building-blocks li b {
       color: var(--clay-strong);
+    }
+
+    #the-loop {
+      display: block;
+      margin: 14px auto 0;
+      width: 70%;
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
     }
 
     /* ---------- images ---------- */
@@ -677,7 +688,10 @@
       <h2><span class="num">03</span>History · Context · Looping · Tools</h2>
       <p>I keep four words pinned to the front of my mind, because every agent, however fancy, is built from them:</p>
       <ul class="building-blocks">
-        <li><b>Looping</b> — repeat the call until the model decides it has a final answer.</li>
+        <li><b>Looping</b> — repeat the call until the model decides it has a final answer.
+          <br><img id="the-loop" src="the-loop.png"
+            alt="Looping — repeat the call until the model decides it has a final answer." />
+        </li>
         <li><b>Context</b> — give it the facts it needs, either statically or fetched dynamically.</li>
         <li><b>Tools</b> — runtime functions it can reach for when it needs to do something or get more information.
         <li><b>History</b> — the model is stateless at its core, so we give it memory by feeding back previous
