@@ -32,7 +32,7 @@ node src/agent.js --demo                      # scripted run, no network, no key
 node src/agent.js "task" --yes                # auto-approve commands
 node src/agent.js "task" --max-steps 6        # tighter loop
 node src/agent.js "task" --model anthropic/claude-sonnet-4.5
-CMD_POLICY=deny node src/agent.js "task"      # read/write only, no shell
+node src/agent.js "task"      # read/write only, no shell
 npm test                                      # 24 offline tests
 ```
 
