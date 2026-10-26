@@ -21,7 +21,7 @@ an agent actually is: **an LLM in a loop with tools and a sandbox**.
 ```bash
 cd min-coding-agent
 cp .env.example .env        # add your OpenRouter key
-npm start -- "create hello.js that prints today's date, run it and save to current folder printing out in console location of the file"
+npm start -- "create hello.js that prints today's date and time, run it and save to current folder with a random number between 100 and 999 as hellloNNN.js where NNN is that random number printing out in console location of the file and use that for the saved output as hello-output-NNN.txt"                
 ```
 
 No install step: there are zero dependencies (Node 20+, uses built-in `fetch`,
@@ -38,7 +38,10 @@ npm test                                      # 24 offline tests
 
 ## Configuration and precedence
 
-`src/config.js` reads `min-coding-agent/.env` on every run.
+`src/config.js` looks for `.env` in `min-coding-agent/` first, then walks **up** the
+directory tree, so the single `.env` at the repository root is picked up too. The
+nearest `.env` wins; the path actually used is shown on the startup banner as
+`env file : ...`.
 
 **A value in `.env` beats the same variable exported in your shell.** That is on
 purpose: a stale `OPENROUTER_API_KEY` in `~/.bashrc` would otherwise silently win

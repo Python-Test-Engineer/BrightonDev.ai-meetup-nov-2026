@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { loadConfig, loadDotEnv, fingerprint, normalizeModel } from '../src/config.js';
+import { loadConfig, loadDotEnv, findEnvFile, fingerprint, normalizeModel } from '../src/config.js';
 
 function envFileWith(lines) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-env-'));
@@ -62,6 +62,40 @@ test('quotes, export prefixes and blank values are handled', () => {
     assert.equal(config.apiKey, 'shell-fallback', 'empty .env value does not blank the key');
     assert.equal(config.commandPolicy, 'allow');
   });
+});
+
+test('config finds the .env in the project root when the package has none', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-root-'));
+  const nested = path.join(root, 'mini-coding-agent', 'src');
+  fs.mkdirSync(nested, { recursive: true });
+  const rootEnv = path.join(root, '.env');
+  fs.writeFileSync(rootEnv, 'OPENROUTER_API_KEY=root-key\nMODEL=deepseek/deepseek-chat\n', 'utf8');
+
+  // walk-up search finds it from a nested folder
+  assert.equal(findEnvFile(nested), rootEnv);
+
+  // and the default load (no envFile argument) uses it
+  const saved = process.env.OPENROUTER_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
+  try {
+    const config = loadConfig({}, { startDir: nested });
+    assert.equal(config.envFile, rootEnv);
+    assert.equal(config.apiKey, 'root-key');
+    assert.equal(config.model, 'deepseek/deepseek-chat');
+  } finally {
+    if (saved === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = saved;
+  }
+});
+
+test('a nearer .env wins over one further up', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-near-'));
+  const pkg = path.join(root, 'mini-coding-agent');
+  fs.mkdirSync(pkg, { recursive: true });
+  fs.writeFileSync(path.join(root, '.env'), 'OPENROUTER_API_KEY=outer-key\n', 'utf8');
+  fs.writeFileSync(path.join(pkg, '.env'), 'OPENROUTER_API_KEY=inner-key\n', 'utf8');
+
+  assert.equal(findEnvFile(pkg), path.join(pkg, '.env'));
 });
 
 test('fingerprints never expose the whole key', () => {

@@ -4,6 +4,25 @@ import path from 'node:path';
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..');
 
 /**
+ * Find the .env to use. Looks in this package first, then walks UP the tree
+ * (so a single .env at the repository root is picked up, which is where this
+ * meetup repo keeps its OPENROUTER_API_KEY), stopping at the filesystem root.
+ * The nearest .env wins.
+ *
+ * @returns {string|null} absolute path of the first .env found, else null
+ */
+export function findEnvFile(startDir = PROJECT_ROOT) {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    const candidate = path.join(dir, '.env');
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
  * Minimal .env loader: KEY=VALUE lines, # comments, surrounding quotes stripped.
  *
  * PRECEDENCE: values in `.env` WIN over variables inherited from the shell.
@@ -14,7 +33,7 @@ const PROJECT_ROOT = path.resolve(import.meta.dirname, '..');
  *
  * @returns {Record<string,string>} the keys that came from the file
  */
-export function loadDotEnv(file = path.join(PROJECT_ROOT, '.env')) {
+export function loadDotEnv(file = findEnvFile() ?? path.join(PROJECT_ROOT, '.env')) {
   const fromFile = {};
   if (!fs.existsSync(file)) return fromFile;
 
@@ -64,7 +83,7 @@ export function normalizeModel(model) {
   return hit ? { model: `${hit[1]}/${value}`, normalised: true } : { model: value, normalised: false };
 }
 
-export function loadConfig(overrides = {}, { envFile } = {}) {
+export function loadConfig(overrides = {}, { envFile, startDir } = {}) {
   // Remember what the shell handed us before .env is applied, so we can report
   // when .env actually replaced a different value.
   const inherited = {
@@ -72,7 +91,8 @@ export function loadConfig(overrides = {}, { envFile } = {}) {
     model: process.env.OPENROUTER_MODEL,
   };
 
-  const fromFile = loadDotEnv(envFile);
+  const resolvedEnvFile = envFile ?? findEnvFile(startDir) ?? path.join(PROJECT_ROOT, '.env');
+  const fromFile = loadDotEnv(resolvedEnvFile);
   const sourceOf = (name, fromDotEnv) => {
     if (fromDotEnv) return '.env';
     return process.env[name] !== undefined ? 'environment' : 'not set';
@@ -102,6 +122,6 @@ export function loadConfig(overrides = {}, { envFile } = {}) {
     workspaceRoot: path.resolve(PROJECT_ROOT, process.env.WORKSPACE_DIR || 'workspace'),
     commandPolicy: process.env.CMD_POLICY || 'ask', // allow | ask | deny
     maxSteps: Number(process.env.MAX_STEPS) || 12,
-    envFile: envFile ?? path.join(PROJECT_ROOT, '.env'),
+    envFile: resolvedEnvFile,
   };
 }
