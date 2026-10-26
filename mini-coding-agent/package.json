@@ -1,0 +1,15 @@
+{
+  "name": "min-coding-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A tiny Node coding-agent harness: ReAct loop + 6 tools, zero dependencies.",
+  "scripts": {
+    "start": "node src/agent.js",
+    "demo": "node src/agent.js --demo",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
