@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ui, style } from '../src/ui.js';
+
+// The test runner pipes stdout, so chalk would drop colour without this.
+process.env.FORCE_COLOR = '1';
+const { ui } = await import('../src/ui.js');
 
 /** Everything on screen minus the escapes: what a human actually reads. */
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, '');
@@ -11,13 +14,13 @@ test('styles become ANSI codes but read back as the original text', () => {
   assert.equal(strip(out), 'min-coding-agent');
 });
 
-test('tag lookalikes from model or tool output are printed, not interpreted', () => {
+test('text that looks like a colour tag is printed verbatim', () => {
   const out = ui.answer('wrap errors in <red> and reset with </red>');
   assert.doesNotMatch(out, /\x1b\[31m/);
   assert.equal(strip(out), 'wrap errors in <red> and reset with </red>');
 });
 
-test('backslashes in paths and JSON survive tag rendering', () => {
+test('backslashes in paths and JSON are untouched', () => {
   assert.equal(strip(ui.note('C:\\Users\\me\\workspace')), 'C:\\Users\\me\\workspace');
   assert.equal(strip(ui.tool('write_file', '{"content":"a\\nb"}')), 'tool → write_file {"content":"a\\nb"}');
 });
@@ -29,6 +32,9 @@ test('a failed result is red, a clean one is not', () => {
   assert.doesNotMatch(ui.result('exit code 0'), /\x1b\[31m/);
 });
 
-test('%s inside a value is not eaten by the template', () => {
-  assert.equal(strip(style('%s', 'printf "%s" done')), 'printf "%s" done');
+test('every helper returns a string, so an injected log still works', () => {
+  for (const [name, fn] of Object.entries(ui)) {
+    assert.equal(typeof fn, 'function', `${name} should be a function`);
+    assert.equal(typeof fn('x', 'y'), 'string', `${name} should return a string`);
+  }
 });

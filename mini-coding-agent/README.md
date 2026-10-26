@@ -1,8 +1,8 @@
 # mini-coding-agent
 
 A coding agent in plain Node, built to show what an agent actually is: **an LLM in
-a loop with tools and a sandbox**. The only dependency is `rich-console`, and it
-only draws the coloured output.
+a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
+draws the coloured output.
 
 The loop itself is one ~300-line file (`src/agent.js`); tools, sandbox, config and
 the console theme bring `src/` to ~890 lines. Small enough to read on a projector
@@ -25,7 +25,7 @@ during a talk.
 
 ```bash
 cd mini-coding-agent
-npm install                 # one dependency: rich-console (coloured output)
+npm install                 # one dependency: chalk (coloured output)
 
 # Option A: reuse the .env already at the repo root - it is found automatically.
 # Option B: create one next to this package:
@@ -120,18 +120,18 @@ vendor with `OPENROUTER_PROVIDER_PREFIX=...` if the guess is wrong.
 | `src/tools.js` | ~320 | tool schemas the model reads + the dispatcher that runs them |
 | `src/config.js` | ~130 | `.env` discovery and loading, model + policy config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
-| `src/ui.js` | ~70 | the console palette: `rich-console` tags, one helper per kind of line |
+| `src/ui.js` | ~55 | the console palette: `chalk` calls, one helper per kind of line |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
 | `test/` | ~540 | offline tests for the loop, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
 
 ## Coloured output
 
-`src/ui.js` is the only file that knows about colour. Styles are written as
-`rich-console` tags, so a line reads as text rather than escape codes:
+`src/ui.js` is the only file that knows about colour. Every line of output is one
+`chalk` call in a named helper, so agent.js contains no colour at all:
 
 ```js
-think: (text) => style('<cyan>think:</cyan> %s', text)
+think: (text) => `${chalk.cyan('think:')} ${text}`
 ```
 
 | Kind of line | Colour |
@@ -139,20 +139,21 @@ think: (text) => style('<cyan>think:</cyan> %s', text)
 | banner title | bold cyan |
 | banner labels (`workspace`, `model`, ...) | blue |
 | `task ›` input field | green label, white caret |
-| `… still waiting for the model (5s)` | orange |
+| `… still waiting for the model (5s)` | bright yellow |
 | step headings | blue |
 | `think:` | cyan |
 | `tool →` name and arguments | yellow / white |
 | `result ←` | green, or red when the tool returned `ERROR`/`DENIED`/non-zero exit |
 | final answer heading | bold green |
-| warnings | orange |
+| warnings | bright yellow |
 | failures | red |
 
-Two things keep it honest. Values from the model or a tool are never placed in
-the template itself - they go through a `%s` slot and are escaped first, so a
-file containing `<red>` prints literally instead of repainting the console, and
-Windows paths keep their backslashes (`rich-console` treats `\` as an escape).
-Every helper returns a string, so `runTask` still accepts an injected `log`.
+Two things keep it honest. chalk styles the exact string it is given, so text from
+the model or a tool is never re-read as markup: a file containing `<red>` prints
+verbatim, and Windows paths and JSON keep their backslashes. Every helper returns
+a string, so `runTask` still accepts an injected `log`. chalk also decides when
+not to colour - a pipe, `NO_COLOR`, or `FORCE_COLOR` are all honoured, so
+redirecting a run to a file gives clean text.
 
 ## The six tools
 
