@@ -1,6 +1,7 @@
 .env
 OPENROUTER.txt
 HERMES-KEYS.md
+**/.env
 
 # --- Python / uv ---
 .venv/
