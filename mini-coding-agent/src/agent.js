@@ -6,14 +6,7 @@ import { chat, sanitizeAssistant } from './llm.js';
 import { TOOL_SCHEMAS, runTool, TOOL_NAMES } from './tools.js';
 import { Workspace } from './workspace.js';
 import { loadConfig, fingerprint } from './config.js';
-
-const paint = (code) => (s) => `\x1b[${code}m${s}\x1b[0m`;
-const dim = paint('2');
-const bold = paint('1');
-const cyan = paint('36');
-const green = paint('32');
-const yellow = paint('33');
-const red = paint('31');
+import { ui } from './ui.js';
 
 const SYSTEM_PROMPT = `You are a small coding agent working inside a sandboxed folder.
 
@@ -28,11 +21,24 @@ How to work:
 
 Be concise. One tool call per step where possible.`;
 
+/* ------------------------------------------------------------------ *
+ * Liveness: a slow model call must not look like a frozen program.
+ * ------------------------------------------------------------------ */
+function heartbeat(log, everyMs = 5000) {
+  const started = Date.now();
+  const timer = setInterval(() => {
+    const seconds = Math.round((Date.now() - started) / 1000);
+    log(ui.waiting(`  … still waiting for the model (${seconds}s)`));
+  }, everyMs);
+  timer.unref?.();
+  return { stop: () => clearInterval(timer) };
+}
+
 /**
  * The whole agent: think -> tool call -> result -> repeat -> answer.
  * Nothing here is magic, and that is the point of the demo.
  */
-export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn, confirm, log = console.log }) {
+export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn, confirm, log = console.log, heartbeatMs = 5000 }) {
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: task },
@@ -45,15 +51,18 @@ export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn
 
   for (let step = 1; step <= maxSteps; step += 1) {
     log('');
-    log(dim(`── step ${step}/${maxSteps} ${'─'.repeat(40)}`));
+    log(ui.step(step, maxSteps));
 
     let reply;
+    const beat = heartbeat(log, heartbeatMs);
     try {
       reply = await chatFn({ messages, tools: TOOL_SCHEMAS });
     } catch (err) {
-      log(red(`request failed: ${err.message}`));
+      beat.stop();
+      log(ui.error(`request failed: ${err.message}`));
       return { ok: false, reason: 'request_failed', messages };
     }
+    beat.stop();
 
     const choice = reply?.choices?.[0] ?? {};
     const message = choice.message ?? {};
@@ -62,36 +71,36 @@ export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn
     if (choice.finish_reason === 'length' && !message.tool_calls?.length) {
       messages.push({ role: 'assistant', content: message.content ?? '' });
       messages.push({ role: 'user', content: 'You were cut off by the length limit. Continue with smaller tool calls.' });
-      log(yellow('reply was truncated - asking the model to continue smaller'));
+      log(ui.warn('reply was truncated - asking the model to continue smaller'));
       continue;
     }
 
     messages.push(sanitizeAssistant(message));
     const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
 
-    if (message.content && message.content.trim()) log(cyan(`think: ${message.content.trim()}`));
+    if (message.content && message.content.trim()) log(ui.think(message.content.trim()));
 
     if (calls.length === 0) {
       log('');
-      log(green(bold('── final answer ' + '─'.repeat(38))));
-      log((message.content ?? '(no answer)').trim());
+      log(ui.answerRule());
+      log(ui.answer((message.content ?? '(no answer)').trim()));
       return { ok: true, answer: message.content ?? '', messages, steps: step };
     }
 
     for (const call of calls) {
       const name = call.function?.name ?? '(unnamed)';
       const rawArgs = call.function?.arguments ?? '{}';
-      log(yellow(`tool → ${name} ${dim(rawArgs)}`));
+      log(ui.tool(name, rawArgs));
 
       const result = await runTool(name, rawArgs, ctx);
-      log(dim(`result ← ${result.split('\n')[0].slice(0, 300)}`));
+      log(ui.result(result));
 
       // Every tool_call_id MUST get a matching tool message or the next request is invalid.
       messages.push({ role: 'tool', tool_call_id: call.id, content: String(result) });
     }
   }
 
-  log(red(`stopped: hit the ${maxSteps}-step limit`));
+  log(ui.error(`stopped: hit the ${maxSteps}-step limit`));
   return { ok: false, reason: 'max_steps', messages };
 }
 
@@ -144,10 +153,35 @@ function makeConfirm() {
   return async (command) => {
     if (!process.stdin.isTTY) return 'deny';
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await new Promise((resolve) => rl.question(`  ${yellow('run?')} ${command} ${dim('[y/N]')} `, resolve));
+    const answer = await new Promise((resolve) => rl.question(`  ${ui.prompt('run?')} ${command} ${ui.dim('[y/N]')} `, resolve));
     rl.close();
     return /^y(es)?$/i.test(answer.trim()) ? 'allow' : 'deny';
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * The input field: with no task on the command line, ask for one.
+ * ------------------------------------------------------------------ */
+export async function askTask({ input = process.stdin, output = process.stdout } = {}) {
+  const rl = readline.createInterface({ input, output, terminal: Boolean(output.isTTY) });
+  // Ctrl-C closes the field; the caller then stops with a red note.
+  rl.on('SIGINT', () => rl.close());
+  rl.setPrompt(`  ${ui.field('task')} `);
+
+  try {
+    // An async iterator queues lines properly. `rl.question()` does not: two
+    // lines arriving in one chunk would resolve the first and drop the second.
+    rl.prompt();
+    for await (const raw of rl) {
+      const task = String(raw).trim();
+      if (task) return task;
+      output.write(`  ${ui.warn('nothing entered - type a task, or press Ctrl-C to quit')}\n`);
+      rl.prompt();
+    }
+    return null;
+  } finally {
+    rl.close();
+  }
 }
 
 function parseArgs(argv) {
@@ -169,17 +203,19 @@ function parseArgs(argv) {
 
 function usage() {
   console.log(`
-${bold('min-coding-agent')} - a ~300 line coding agent in Node
+${ui.title('min-coding-agent')} ${ui.dim('- a small coding agent in Node')}
 
-  node src/agent.js "task for the agent"     live model, ask before each command
+  node src/agent.js                          live model, type the task in the prompt
+  node src/agent.js "task for the agent"     same, task given up front
   node src/agent.js --demo                   scripted run, no network
   node src/agent.js "..." --yes              auto-approve commands
   node src/agent.js "..." --allow-commands   same, from a flag
   node src/agent.js "..." --max-steps 6      cap the loop
   node src/agent.js "..." --model anthropic/claude-sonnet-4.5
 
-Env: OPENROUTER_API_KEY, OPENROUTER_MODEL, CMD_POLICY=allow|ask|deny, MAX_STEPS
+${ui.warn('Env: OPENROUTER_API_KEY, OPENROUTER_MODEL, CMD_POLICY=allow|ask|deny, MAX_STEPS, REQUEST_TIMEOUT_MS')}
 Files are confined to ./workspace. Run "npm test" for the offline test suite.
+Exit codes: 0 done, 1 request failed, 2 no task, 3 stopped at the step limit.
 `);
 }
 
@@ -195,35 +231,53 @@ async function main() {
   const commandPolicy = opts.yes || opts.demo ? 'allow' : (opts.policy ?? config.commandPolicy);
 
   const source = (label, overrode) => (overrode ? `${label}, overrode the shell value` : label);
-  console.log(bold(cyan('\nmin-coding-agent')));
-  console.log(dim(`workspace : ${workspace.root}`));
-  console.log(dim(`model     : ${opts.demo ? 'scripted (no network)' : `${config.model} (from ${source(config.modelSource, config.modelOverrodeShell)})`}`));
-  console.log(dim(`key       : ${opts.demo ? '-' : `${fingerprint(config.apiKey)} from ${source(config.apiKeySource, config.apiKeyOverrodeShell)}`}`));
-  console.log(dim(`env file  : ${fs.existsSync(config.envFile) ? config.envFile : `${config.envFile} (missing)`}`));
-  console.log(dim(`commands  : ${commandPolicy}`));
-  console.log(dim(`tools     : ${TOOL_NAMES.join(', ')}`));
+  const kv = (label, value) => console.log(ui.kv(label, value));
+  console.log(ui.title('\nmin-coding-agent'));
+  kv('workspace', workspace.root);
+  kv('model', opts.demo ? 'scripted (no network)' : `${config.model} (from ${source(config.modelSource, config.modelOverrodeShell)})`);
+  kv('key', opts.demo ? '-' : `${fingerprint(config.apiKey)} from ${source(config.apiKeySource, config.apiKeyOverrodeShell)}`);
+  kv('env file', fs.existsSync(config.envFile) ? config.envFile : `${config.envFile} (missing)`);
+  kv('commands', commandPolicy);
+  kv('timeout', `${Math.round(config.requestTimeoutMs / 1000)}s per model call`);
+  kv('tools', TOOL_NAMES.join(', '));
 
   if (!opts.demo && !config.model.includes('/')) {
-    console.log(yellow(`warning: model "${config.model}" is not an OpenRouter slug (needs vendor/model). Set OPENROUTER_MODEL in .env.`));
+    console.log(ui.warn(`warning: model "${config.model}" is not an OpenRouter slug (needs vendor/model). Set OPENROUTER_MODEL in .env.`));
   }
   if (!opts.demo && config.modelNormalised) {
-    console.log(dim(`note      : bare model name in config was normalised to "${config.model}"`));
+    console.log(ui.note(`note      : bare model name in config was normalised to "${config.model}"`));
   }
 
   const chatFn = opts.demo
     ? demoChat()
-    : (args) => chat({ apiKey: config.apiKey, model: config.model, ...args });
+    : (args) => chat({ apiKey: config.apiKey, model: config.model, timeoutMs: config.requestTimeoutMs, ...args });
 
   if (!opts.demo && !config.apiKey) {
-    console.log(red('\nOPENROUTER_API_KEY is not set. Copy .env.example to .env, or run --demo.'));
+    console.log(ui.error('\nOPENROUTER_API_KEY is not set. Copy .env.example to .env, or run --demo.'));
     process.exitCode = 1;
     return;
   }
 
-  const task = opts.task || (opts.demo ? 'Show the loop: create a script, run it, edit it, run it again.' : '');
-  if (!task) return usage();
+  let task = opts.task || (opts.demo ? 'Show the loop: create a script, run it, edit it, run it again.' : '');
 
-  console.log(dim(`\ntask      : ${task}\n`));
+  if (!task) {
+    // Constraint: an input field needs a terminal - a pipe can never answer it.
+    if (!process.stdin.isTTY) {
+      console.log(ui.error('stopped: cannot ask for a task because stdin is not a terminal.'));
+      console.log(ui.dim('  pass it as an argument instead: node src/agent.js "create hello.js and run it"'));
+      process.exitCode = 2;
+      return;
+    }
+    console.log(ui.dim('\n  no task on the command line - type one below (Ctrl-C to quit)\n'));
+    task = await askTask();
+    if (!task) {
+      console.log(ui.error('\nstopped: no task given (nothing entered, or the input closed)'));
+      process.exitCode = 2;
+      return;
+    }
+  }
+
+  console.log(ui.note(`\ntask      : ${task}\n`));
 
   const result = await runTask({
     task,
@@ -240,7 +294,7 @@ async function main() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
-    console.error(red(`fatal: ${err.stack ?? err.message}`));
+    console.error(ui.error(`fatal: ${err.stack ?? err.message}`));
     process.exitCode = 1;
   });
 }

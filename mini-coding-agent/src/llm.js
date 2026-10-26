@@ -1,25 +1,40 @@
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
+/** A stalled socket must not look like a hung agent. */
+const DEFAULT_TIMEOUT_MS = 90_000;
+
 /**
  * One model call. OpenAI-compatible tool calling over plain fetch - no SDK,
  * because the point of the demo is that an agent is just this HTTP request
  * in a loop.
  */
-export async function chat({ apiKey, model, messages, tools, signal }) {
+export async function chat({ apiKey, model, messages, tools, signal, timeoutMs = DEFAULT_TIMEOUT_MS }) {
   if (!apiKey) throw new Error('OPENROUTER_API_KEY is not set (put it in .env or the environment)');
 
-  const res = await fetch(ENDPOINT, {
-    method: 'POST',
-    signal,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'X-Title': 'min-coding-agent',
-    },
-    body: JSON.stringify({ model, messages, tools, max_tokens: 2048 }),
-  });
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const abort = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
-  const text = await res.text();
+  let res;
+  let text;
+  try {
+    res = await fetch(ENDPOINT, {
+      method: 'POST',
+      signal: abort,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'X-Title': 'min-coding-agent',
+      },
+      body: JSON.stringify({ model, messages, tools, max_tokens: 2048 }),
+    });
+    text = await res.text();
+  } catch (err) {
+    if (timeout.aborted) {
+      throw new Error(`request timed out after ${Math.round(timeoutMs / 1000)}s - OpenRouter did not answer`);
+    }
+    throw err;
+  }
+
   if (!res.ok) {
     const hint = res.status === 401 ? ' (bad or revoked key)'
       : res.status === 402 ? ' (out of credits)' : '';

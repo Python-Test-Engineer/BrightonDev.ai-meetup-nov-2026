@@ -1,10 +1,12 @@
 # mini-coding-agent
 
-A coding agent in plain Node, with no dependencies, built to show what an agent
-actually is: **an LLM in a loop with tools and a sandbox**.
+A coding agent in plain Node, built to show what an agent actually is: **an LLM in
+a loop with tools and a sandbox**. The only dependency is `rich-console`, and it
+only draws the coloured output.
 
-The loop itself is one ~250-line file (`src/agent.js`); tools, sandbox and config
-bring `src/` to ~830 lines. Small enough to read on a projector during a talk.
+The loop itself is one ~300-line file (`src/agent.js`); tools, sandbox, config and
+the console theme bring `src/` to ~890 lines. Small enough to read on a projector
+during a talk.
 
 ```
         ┌─────────────┐
@@ -23,25 +25,43 @@ bring `src/` to ~830 lines. Small enough to read on a projector during a talk.
 
 ```bash
 cd mini-coding-agent
+npm install                 # one dependency: rich-console (coloured output)
 
 # Option A: reuse the .env already at the repo root - it is found automatically.
 # Option B: create one next to this package:
 cp .env.example .env        # then add your OpenRouter key
 
+npm start                  # then type the task at the "task ›" prompt
+```
+
+Anything that stops a run early - no task, a missing key, a failed request, the
+step limit - is printed in red and sets a non-zero exit code (0 done, 1 request
+failed, 2 no task, 3 step limit). While a model call is in flight the console
+prints `… still waiting for the model (5s)` every five seconds and the request is
+capped at `REQUEST_TIMEOUT_MS` (90s), so a slow provider never looks like a
+frozen program.
+
+With no task on the command line the agent takes it from an input field. A blank
+line re-asks, Ctrl-C quits, and piped stdin cannot answer it (there is no
+terminal), so that path stops in red instead of hanging. For scripts, pass the
+task as an argument:
+
+```bash
 npm start -- "create hello.js that prints today's date and time, run it, and save its output to hello-output.txt"
 ```
 
-No install step: there are zero dependencies (Node 20+, uses built-in `fetch`,
-`node:child_process`, `node:test`).
+Nothing else to install: Node 20+ and its built-in `fetch`, `node:child_process`
+and `node:test` do the rest.
 
 ```bash
+node src/agent.js                             live model, task typed at the prompt
 node src/agent.js --demo                      # scripted run, no network, no key
 node src/agent.js "task" --yes                # auto-approve commands
 node src/agent.js "task" --allow-commands     # same thing, as a flag
 node src/agent.js "task" --max-steps 6        # tighter loop
 node src/agent.js "task" --model anthropic/claude-sonnet-4.5
 node src/agent.js --help                      # usage summary
-npm test                                      # 29 offline tests
+npm test                                      # 40 offline tests
 ```
 
 `--model` beats `.env`, which beats your shell (next section). A bare model name
@@ -65,6 +85,7 @@ from the environment, and `--model` beats both.
 | `OPENROUTER_MODEL` or `MODEL` | `deepseek/deepseek-v4.1-flash-1017` |
 | `CMD_POLICY` | `ask` (`allow` / `ask` / `deny`) |
 | `MAX_STEPS` | `12` |
+| `REQUEST_TIMEOUT_MS` | `90000` - a stalled call stops instead of hanging |
 | `WORKSPACE_DIR` | `workspace` |
 | `OPENROUTER_PROVIDER_PREFIX` | unset - only used to force a vendor prefix |
 
@@ -81,6 +102,7 @@ model     : deepseek/deepseek-v4.1-flash-1017 (from .env, overrode the shell val
 key       : sk-or...aaa5 (73 chars) from .env
 env file  : ...\BrightonDev.ai-meetup-nov-2026\.env
 commands  : ask
+timeout   : 90s per model call
 tools     : list_files, read_file, create_file, write_file, edit_file, run_command
 ```
 
@@ -94,13 +116,43 @@ vendor with `OPENROUTER_PROVIDER_PREFIX=...` if the guess is wrong.
 
 | File | Lines | What it shows |
 |---|---|---|
-| `src/agent.js` | ~250 | the ReAct loop, system prompt, CLI, scripted demo fallback |
+| `src/agent.js` | ~300 | the ReAct loop, system prompt, CLI, input field, heartbeat, scripted demo fallback |
 | `src/tools.js` | ~320 | tool schemas the model reads + the dispatcher that runs them |
 | `src/config.js` | ~130 | `.env` discovery and loading, model + policy config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
-| `src/llm.js` | ~50 | one HTTP request to OpenRouter, and why assistant messages get sanitised |
-| `test/` | ~420 | offline tests for the loop, the config, the tools and the path resolver |
+| `src/ui.js` | ~70 | the console palette: `rich-console` tags, one helper per kind of line |
+| `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
+| `test/` | ~540 | offline tests for the loop, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
+
+## Coloured output
+
+`src/ui.js` is the only file that knows about colour. Styles are written as
+`rich-console` tags, so a line reads as text rather than escape codes:
+
+```js
+think: (text) => style('<cyan>think:</cyan> %s', text)
+```
+
+| Kind of line | Colour |
+|---|---|
+| banner title | bold cyan |
+| banner labels (`workspace`, `model`, ...) | blue |
+| `task ›` input field | green label, white caret |
+| `… still waiting for the model (5s)` | orange |
+| step headings | blue |
+| `think:` | cyan |
+| `tool →` name and arguments | yellow / white |
+| `result ←` | green, or red when the tool returned `ERROR`/`DENIED`/non-zero exit |
+| final answer heading | bold green |
+| warnings | orange |
+| failures | red |
+
+Two things keep it honest. Values from the model or a tool are never placed in
+the template itself - they go through a `%s` slot and are escaped first, so a
+file containing `<red>` prints literally instead of repainting the console, and
+Windows paths keep their backslashes (`rich-console` treats `\` as an escape).
+Every helper returns a string, so `runTask` still accepts an injected `log`.
 
 ## The six tools
 
@@ -167,6 +219,7 @@ it on the next iteration.
 npm test        # node --test: offline, no key, no network
 ```
 
-29 tests cover the loop (including truncation and the max-steps stop), `.env`
-discovery and precedence, every tool's failure modes, and the path resolver's
-escape attempts.
+40 tests cover the loop (including truncation and the max-steps stop), `.env`
+discovery and precedence, every tool's failure modes, the path resolver's escape
+attempts, the palette (tag escaping, backslashes, red results) and the input field
+(trimming, blank-line re-prompt, closed input).

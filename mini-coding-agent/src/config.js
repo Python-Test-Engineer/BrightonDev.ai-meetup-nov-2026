@@ -122,6 +122,7 @@ export function loadConfig(overrides = {}, { envFile, startDir } = {}) {
     workspaceRoot: path.resolve(PROJECT_ROOT, process.env.WORKSPACE_DIR || 'workspace'),
     commandPolicy: process.env.CMD_POLICY || 'ask', // allow | ask | deny
     maxSteps: Number(process.env.MAX_STEPS) || 12,
+    requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS) || 90_000,
     envFile: resolvedEnvFile,
   };
 }

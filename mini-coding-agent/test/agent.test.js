@@ -86,3 +86,24 @@ test('a truncated reply is not dispatched as a tool call', async () => {
   assert.equal(result.ok, true);
   assert.equal(result.messages.filter((m) => m.role === 'tool').length, 0);
 });
+
+test('a slow model call says it is still working instead of looking hung', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-agent-'));
+  const workspace = new Workspace(root);
+  const lines = [];
+  const slow = async () => {
+    await new Promise((resolve) => { setTimeout(resolve, 120); });
+    return final('done');
+  };
+
+  const result = await runTask({
+    task: 'think about it', workspace, commandPolicy: 'deny', maxSteps: 2,
+    chatFn: slow, log: (line) => lines.push(String(line)), heartbeatMs: 25,
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(
+    lines.some((line) => /still waiting for the model \(\d+s\)/.test(line)),
+    `expected a heartbeat line, got: ${lines.join(' | ')}`,
+  );
+});

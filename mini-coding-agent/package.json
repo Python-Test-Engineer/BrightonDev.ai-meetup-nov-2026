@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "A tiny Node coding-agent harness: ReAct loop + 6 tools, zero dependencies.",
+  "description": "A tiny Node coding-agent harness: ReAct loop + 6 tools, one dependency for colour.",
   "scripts": {
     "start": "node src/agent.js",
     "demo": "node src/agent.js --demo",
@@ -11,5 +11,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "rich-console": "^0.0.4"
   }
 }
