@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mini-coding-agent &middot; how an agent actually works</title>
+<style>
+html{font-size:24px}
+
+:root{
+  --paper:#f0eee6; --surface:#fbfaf7; --ivory:#fffdfa; --ink:#1f1e1d;
+  --prose:#33302c; --muted:#55524c; --stone:#8c877c;
+  --line:#e0dbcf; --line-soft:#e9e4d8; --tint:#f6ede6;
+  --terra:#d97757; --terra-dark:#c9633f; --amber:#b9862f;
+  --code-bg:#23211e; --code-bar:#2b2823; --code-line:#3a3732;
+  --code-ink:#f2ece1; --code-dim:#a9a294; --code-accent:#f0b49a;
+  --sidebar:19.25rem; --measure:46rem;
+  --sans:-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif;
+  --serif:'Iowan Old Style',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;
+  --mono:'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--paper); color:var(--prose);
+  font:1.03125rem/1.66 var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:#f0d3c6; color:#2a2622}
+
+/* ---------- shell ---------- */
+.shell{display:grid; grid-template-columns:var(--sidebar) minmax(0,1fr); align-items:start}
+.sidebar{
+  position:sticky; top:0; height:100vh; overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:#cec6b5 transparent;
+  padding:1.625rem 1.125rem 2.125rem 1.375rem;
+  border-right:0.0625rem solid var(--line);
+  background:linear-gradient(180deg,#f4f1e9,#efece3 60%,#ece8de);
+}
+.side-kicker{
+  display:block; margin:0 0 0.625rem; color:var(--terra-dark);
+  font:600 0.65625rem/1.3 var(--sans); letter-spacing:.14em; text-transform:uppercase; text-decoration:none;
+}
+.side-title{
+  margin:0; color:var(--ink); font:500 1.3125rem/1.2 var(--serif); letter-spacing:-.01em;
+}
+.side-sub{margin:0.375rem 0 0; color:var(--stone); font-size:0.7875rem; line-height:1.45}
+.side-rule{height:0.0625rem; margin:1.125rem 0 0.875rem; background:var(--line)}
+.side-label{
+  margin:0 0 0.375rem; color:var(--stone);
+  font:600 0.65625rem/1.3 var(--sans); letter-spacing:.13em; text-transform:uppercase;
+}
+.toc{display:flex; flex-direction:column; gap:0.0625rem}
+.toc a{
+  display:flex; gap:0.5625rem; align-items:baseline;
+  padding:0.375rem 0.5625rem 0.375rem 0.625rem; border-left:0.125rem solid transparent; border-radius:0 0.4375rem 0.4375rem 0;
+  color:var(--muted); font-size:0.8375rem; line-height:1.4; text-decoration:none;
+  transition:background .14s,color .14s,border-color .14s;
+}
+.toc a .n{color:#a9a294; font:0.6875rem/1 var(--mono); flex:0 0 1.125rem}
+.toc a:hover{background:#e8e3d6; color:var(--ink)}
+.toc a.active{background:var(--tint); border-left-color:var(--terra); color:var(--ink); font-weight:600}
+.toc a.active .n{color:var(--terra-dark)}
+.side-foot{
+  margin-top:1.25rem; padding-top:0.875rem; border-top:0.0625rem solid var(--line);
+  color:var(--stone); font-size:0.7375rem; line-height:1.6;
+}
+.side-foot code{font-size:0.6875rem}
+
+.progress{position:fixed; top:0; left:var(--sidebar); right:0; height:0.125rem; z-index:40; background:transparent}
+.progress span{display:block; height:100%; width:0; background:var(--terra); transition:width .1s linear}
+
+.sidebar::-webkit-scrollbar{width:0.4375rem}
+.sidebar::-webkit-scrollbar-thumb{background:#d5ccbb; border-radius:0.5rem}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- content pane ---------- */
+.pane{padding:3.25rem 3.5rem 8.75rem; min-width:0}
+.inner{max-width:var(--measure); margin:0 auto}
+
+.page-heading{margin:0 0 2.125rem; padding-bottom:1.75rem; border-bottom:0.0625rem solid var(--line)}
+.page-heading .eyebrow{
+  margin:0 0 0.75rem; color:var(--terra-dark);
+  font:600 0.6875rem/1.3 var(--sans); letter-spacing:.15em; text-transform:uppercase;
+}
+h1{
+  margin:0; color:var(--ink); font:500 clamp(2.125rem,4vw,2.875rem)/1.1 var(--serif); letter-spacing:-.02em;
+}
+.page-heading .lede{margin:0.875rem 0 0; color:var(--muted); font-size:1.09375rem; max-width:38rem}
+.meta{
+  margin:1.25rem 0 0; display:flex; flex-wrap:wrap; gap:0.25rem 0.6875rem;
+  color:var(--stone); font:0.7rem/1.6 var(--mono);
+}
+.meta span::before{content:"·"; margin-right:0.6875rem; color:#c3bcae}
+.meta span:first-child::before{content:none; margin:0}
+
+section{padding-top:0.375rem; margin:0 0 2.75rem}
+section:first-of-type h2{margin-top:0}
+h2{
+  display:flex; gap:0.8125rem; align-items:baseline;
+  margin:2.375rem 0 0.875rem; color:var(--ink);
+  font:500 1.65625rem/1.22 var(--serif); letter-spacing:-.015em;
+  scroll-margin-top:1.625rem;
+}
+h2 .num{
+  flex:0 0 auto; color:var(--terra); padding-top:0.125rem;
+  font:600 0.71875rem/1 var(--mono); letter-spacing:.06em;
+}
+h3{
+  margin:1.875rem 0 0.625rem; color:var(--ink);
+  font:600 0.96875rem/1.4 var(--sans); letter-spacing:.005em;
+}
+p{margin:0 0 0.875rem}
+p + p{margin-top:-0.125rem}
+strong{color:var(--ink); font-weight:600}
+em{font-style:italic; color:var(--ink)}
+a{color:var(--terra-dark); text-decoration-thickness:0.0625rem; text-underline-offset:0.125rem}
+
+ul{margin:0 0 1rem; padding-left:0; list-style:none}
+li{position:relative; margin:0 0 0.625rem; padding-left:1.25rem}
+li::before{
+  content:""; position:absolute; left:0.1875rem; top:.66em;
+  width:0.375rem; height:0.375rem; border-radius:50%; background:#d8b6a6;
+}
+li strong{color:var(--ink)}
+
+code{
+  padding:.12em .38em; border-radius:0.3125rem; background:#e9e4d7; color:#7c3f2b;
+  font:.855em/1.5 var(--mono); word-break:break-word;
+}
+
+/* ---------- callouts ---------- */
+.callout{
+  margin:1.25rem 0 1.375rem; padding:0.8125rem 1.0625rem 0.875rem;
+  border-left:0.1875rem solid var(--terra); border-radius:0 0.5625rem 0.5625rem 0;
+  background:var(--tint); color:#4b4741; font-size:0.925rem; line-height:1.62;
+}
+.callout strong{color:var(--ink)}
+.callout.warn{border-left-color:var(--amber); background:#f7f0da; color:#4e4734}
+
+/* ---------- stat strip ---------- */
+.stats{
+  display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.0625rem;
+  margin:1.25rem 0 1.625rem; border:0.0625rem solid var(--line); border-radius:0.75rem; overflow:hidden;
+  background:var(--line);
+}
+.stats div{display:flex; flex-direction:column; gap:0.125rem; padding:0.75rem 0.8125rem; background:var(--surface)}
+.stats b{color:var(--ink); font:600 1.1875rem/1.1 var(--serif)}
+.stats span{color:var(--stone); font-size:0.6625rem; letter-spacing:.05em; text-transform:uppercase}
+
+/* ---------- code ---------- */
+figure.code, figure.ascii{margin:1.125rem 0 1.375rem; border-radius:0.6875rem; overflow:hidden}
+figure.code{margin-left:-1.375rem; margin-right:-1.375rem}
+figure.code{background:var(--code-bg); border:0.0625rem solid #34312b; box-shadow:0 0.125rem 0.625rem rgba(31,30,29,.07)}
+figure.code figcaption{
+  display:flex; justify-content:space-between; gap:0.75rem; align-items:center;
+  padding:0.5rem 0.875rem; background:var(--code-bar); border-bottom:0.0625rem solid var(--code-line);
+  color:var(--code-accent); font:0.7125rem/1.4 var(--mono); letter-spacing:.02em;
+}
+figure.code figcaption .lang{color:#7d776b; font-size:0.6625rem; letter-spacing:.1em; text-transform:uppercase}
+figure.code pre{
+  margin:0; padding:0.9375rem 1.125rem 1.0625rem; overflow-x:auto;
+  color:var(--code-ink); font:0.775rem/1.66 var(--mono); tab-size:2;
+  white-space:pre-wrap; overflow-wrap:break-word;
+}
+figure.ascii{
+  border:0.0625rem dashed #d3ccbb; background:#f7f4ec;
+}
+figure.ascii figcaption{
+  padding:0.4375rem 0.875rem 0; color:var(--stone);
+  font:600 0.65rem/1.4 var(--sans); letter-spacing:.12em; text-transform:uppercase;
+}
+figure.ascii pre{
+  margin:0; padding:0.6875rem 0.875rem 0.9375rem; overflow-x:auto;
+  color:#4c483f; font:0.76875rem/1.55 var(--mono); white-space:pre;
+}
+
+/* ---------- tables ---------- */
+.table-wrap{margin:1rem 0 1.375rem; overflow-x:auto; scrollbar-width:thin; scrollbar-color:#cec6b5 transparent}
+.table-wrap::-webkit-scrollbar{height:0.4375rem}
+.table-wrap::-webkit-scrollbar-thumb{background:#d5ccbb; border-radius:0.5rem}
+table{width:100%; border-collapse:collapse; font-size:0.875rem; line-height:1.5}
+thead th{
+  padding:0 0.75rem 0.5rem 0; border-bottom:0.0625rem solid var(--line); text-align:left;
+  color:var(--stone); font:600 0.6625rem/1.3 var(--sans); letter-spacing:.09em; text-transform:uppercase;
+}
+tbody td{padding:0.625rem 0.75rem 0.625rem 0; border-bottom:0.0625rem solid var(--line-soft); vertical-align:top; color:var(--muted)}
+tbody tr:last-child td{border-bottom:none}
+tbody td:first-child{color:var(--ink)}
+tbody td code{font-size:0.75rem}
+tbody td:first-child{white-space:nowrap}
+.tag{
+  display:inline-block; margin-left:0.375rem; padding:0.0625rem 0.375rem; border-radius:1.25rem;
+  background:#f0dcd2; color:#9a4d31; font:600 0.6rem/1.5 var(--sans); letter-spacing:.08em; text-transform:uppercase;
+}
+
+/* ---------- footer ---------- */
+.colophon{
+  margin-top:3.5rem; padding-top:1.125rem; border-top:0.0625rem solid var(--line);
+  color:var(--stone); font-size:0.775rem; line-height:1.7;
+}
+.colophon code{font-size:0.7rem}
+
+/* ---------- dark ---------- */
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#171614; --surface:#1e1d1a; --ivory:#232220; --ink:#f1ece2;
+    --prose:#cdc7ba; --muted:#a8a294; --stone:#8b857a;
+    --line:#332f29; --line-soft:#2a2721; --tint:#2b241f;
+    --terra:#e08a6a; --terra-dark:#eda07e; --amber:#d3a44a;
+    --code-bg:#1b1a17; --code-bar:#232220; --code-line:#332f2a;
+    --code-ink:#efe9de; --code-dim:#9a948a; --code-accent:#f0b49a;
+  }
+  ::selection{background:#4a2f24; color:#f1ece2}
+  .sidebar{background:linear-gradient(180deg,#1c1b18,#191815 60%,#171614)}
+  .toc a .n{color:#6f6a60}
+  .toc a:hover{background:#242320}
+  .toc a.active{background:#2b241f}
+  .side-kicker{color:#e08a6a}
+  code{background:#2a2721; color:#e2a184}
+  .callout{color:#c9c3b6}
+  .callout.warn{color:#cdc4ad}
+  figure.ascii{background:#1d1c19; border-color:#3a362f}
+  figure.ascii pre{color:#c3bcae}
+  .tag{background:#3a2a22; color:#e8a888}
+  .meta span::before{color:#4a463f}
+}
+
+/* ---------- narrow ---------- */
+@media (max-width: 940px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:static; height:auto; border-right:none; border-bottom:0.0625rem solid var(--line); padding:1.375rem 1.25rem 1.125rem}
+  .toc{flex-direction:row; flex-wrap:wrap; gap:0.25rem 0.375rem}
+  .toc a{padding:0.3125rem 0.5625rem; border-left:none; border-radius:0.4375rem; background:#eae5d8; font-size:0.775rem}
+  .toc a .n{flex:0 0 auto}
+  .toc a.active{border-left:none}
+  .side-foot{display:none}
+  .progress{left:0}
+  .pane{padding:1.875rem 1.25rem 5.625rem}
+  h2{font-size:1.4375rem}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .table-wrap{margin-left:0; margin-right:0}
+  figure.code{margin-left:0; margin-right:0}
+  thead th{white-space:nowrap}
+  tbody td, tbody td code{white-space:normal; overflow-wrap:anywhere}
+}
+
+/* ---------- print ---------- */
+@media print{
+  .sidebar,.progress{display:none}
+  .shell{display:block}
+  .pane{padding:0}
+  body{background:#fff; font-size:10.5pt}
+  h2{break-after:avoid} figure,table,.callout{break-inside:avoid}
+  figure.code{margin-left:0; margin-right:0}
+  a{color:inherit; text-decoration:none}
+}
+</style>
+</head>
+<body>
+<div class="progress"><span id="bar"></span></div>
+<div class="shell">
+
+  <aside class="sidebar">
+    <a class="side-kicker" href="#top">Brighton Dev AI &middot; Nov 2026</a>
+    <p class="side-title">mini-coding-agent</p>
+    <p class="side-sub">An agent is a model, six tools and a loop. This is all of it.</p>
+    <div class="side-rule"></div>
+    <p class="side-label">Contents</p>
+    <nav class="toc" id="toc">
+<a href="#what"><span class="n">01</span><span>What an agent actually is</span></a>
+<a href="#shape"><span class="n">02</span><span>The shape of the program</span></a>
+<a href="#loop"><span class="n">03</span><span>The loop</span></a>
+<a href="#model"><span class="n">04</span><span>The model call</span></a>
+<a href="#messages"><span class="n">05</span><span>Messages are the memory</span></a>
+<a href="#tools"><span class="n">06</span><span>The six tools</span></a>
+<a href="#edit"><span class="n">07</span><span>edit_file, the interesting one</span></a>
+<a href="#sandbox"><span class="n">08</span><span>The sandbox</span></a>
+<a href="#policy"><span class="n">09</span><span>Human in the loop</span></a>
+<a href="#ui"><span class="n">10</span><span>The console palette</span></a>
+<a href="#config"><span class="n">11</span><span>Configuration and precedence</span></a>
+<a href="#bounds"><span class="n">12</span><span>Bounded autonomy</span></a>
+<a href="#trace"><span class="n">13</span><span>A real run, annotated</span></a>
+<a href="#run"><span class="n">14</span><span>Run it yourself</span></a>
+<a href="#limits"><span class="n">15</span><span>What it deliberately does not do</span></a>
+    </nav>
+    <div class="side-foot">
+      Source: <code>mini-coding-agent/</code><br>
+      948 lines &middot; Node 20+ &middot; one dependency<br>
+      Chapters 01&ndash;15 follow the files.
+    </div>
+  </aside>
+
+  <main class="pane" id="top">
+    <div class="inner">
+      <header class="page-heading">
+        <p class="eyebrow">Explainer &middot; the loop, the tools, the sandbox</p>
+        <h1>How a coding agent actually works</h1>
+        <p class="lede">A complete coding agent in 948 lines of plain Node: one HTTP request, six tools, a loop
+        with four bounds, and a folder it cannot escape. Read it top to bottom, or jump to the part you
+        doubt.</p>
+        <p class="meta">
+          <span>src/agent.js 300</span>
+          <span>src/tools.js 318</span>
+          <span>src/config.js 128</span>
+          <span>src/workspace.js 85</span>
+          <span>src/llm.js 66</span>
+          <span>src/ui.js 51</span>
+        </p>
+      </header>
+
+<section id="what">
+<h2><span class="num">01</span><span>What an agent actually is</span></h2>
+
+<p>Strip the branding off a coding agent and three things remain: a <strong>model</strong> that can only
+produce text, a set of <strong>tools</strong> that can actually do something, and a <strong>loop</strong> that
+hands the model's own text back to it as an observation. Everything else &mdash; retries, memory, sub-agents,
+skills, permissions, project rules &mdash; is a layer laid on top of those three.</p>
+
+<p><em>mini-coding-agent</em> is those three things and nothing else: 948 lines in <code>src/</code>, one
+dependency (<code>chalk</code>, for colour), no SDK, no framework. The model is reached with a single
+<code>fetch</code>. This page walks the whole program, in the order you would read it.</p>
+
+<div class="stats">
+  <div><b>948</b><span>lines in src/</span></div>
+  <div><b>300</b><span>of them the loop</span></div>
+  <div><b>6</b><span>tools</span></div>
+  <div><b>1</b><span>dependency</span></div>
+  <div><b>40</b><span>offline tests</span></div>
+</div>
+
+<h3>The whole idea, in six lines</h3>
+<figure class="ascii"><figcaption><span>pseudocode</span></figcaption><pre>messages = [system prompt, user task]
+
+repeat up to maxSteps:
+    reply = model(messages, tools)          # text in, text out
+    if reply has no tool calls:  return reply.content      # done
+    for each tool call:  messages.append(tool result)      # observation</pre></figure>
+<p>That is not a simplification of an agent &mdash; it <em>is</em> the agent. A chatbot is the same program
+with the loop deleted: one model call, one answer, no way to look at the world and react to what it saw.
+The rest of this page is the detail behind each line: what the model request contains, what a tool call
+really is, and what stops the loop from running forever.</p>
+
+<h3>What it looks like while it runs</h3>
+<figure class="code"><figcaption><span>console</span><span class="lang">stdout</span></figcaption><pre>── step 1/12 ────────────────────────────────────────
+think: Creating a script, then running it to check it works.
+tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;...&quot;}
+result ← created demo/hello.js (72 bytes)</pre></figure>
+<p>Read those four lines as a sentence: the model <em>thought</em>, it <em>acted</em>, the world
+<em>answered</em>, and the loop went round again with that answer in hand. Every coding agent you have used
+prints a variation of this. Nothing in the middle is hidden.</p>
+
+</section>
+
+<section id="shape">
+<h2><span class="num">02</span><span>The shape of the program</span></h2>
+
+<p>Six files, each answering one question an audience usually asks. They import in one direction only, so
+there is no cycle to hold in your head.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>300</td><td>Where is the loop? Also the CLI, the input field and the scripted demo.</td></tr><tr><td><code>src/tools.js</code></td><td>318</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/config.js</code></td><td>128</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>51</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── the loop ───────────────┐
+   ├── llm.js         one POST      │  the agent&#x27;s only
+   ├── tools.js       schemas + run │  reach into the world
+   │     └── workspace.js   containment
+   ├── config.js      .env + defaults
+   └── ui.js          every chalk call</pre></figure>
+<p>There is no plugin registry, no abstract base class, no event bus. <code>TOOL_SCHEMAS</code> is an array
+literal and <code>HANDLERS</code> is an object literal whose keys happen to be the tool names; the dispatcher
+is thirty lines. To add a seventh tool you would edit two places and be done.</p>
+<div class="callout "><strong>Read it in this order.</strong> <code>agent.js</code> first, out loud, skipping the banner code at
+the bottom. Then <code>tools.js</code> top to bottom, because the schema descriptions are the only prompt
+engineering in the project. Everything else is plumbing you can skim on the projector.</div>
+</section>
+
+<section id="loop">
+<h2><span class="num">03</span><span>The loop</span></h2>
+
+<p><code>runTask</code> is the whole agent. It takes a task, builds the first two messages, and then runs the
+same seven beats until the model stops asking for tools or the step budget runs out. Here it is with the logging
+lines removed (<code>agent.js:41&ndash;105</code>):</p>
+<figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>export async function runTask({
+  task, workspace, commandPolicy, maxSteps, chatFn, confirm,
+  log = console.log, heartbeatMs = 5000,
+}) {
+  const messages = [
+    { role: &#x27;system&#x27;, content: SYSTEM_PROMPT },
+    { role: &#x27;user&#x27;,   content: task },
+  ];
+  const ctx = { workspace, commandPolicy, confirm };
+
+  for (let step = 1; step &lt;= maxSteps; step += 1) {
+    log(ui.step(step, maxSteps));
+
+    let reply;
+    const beat = heartbeat(log, heartbeatMs);
+    try {
+      reply = await chatFn({ messages, tools: TOOL_SCHEMAS });
+    } catch (err) {
+      beat.stop();
+      log(ui.error(`request failed: ${err.message}`));
+      return { ok: false, reason: &#x27;request_failed&#x27;, messages };
+    }
+    beat.stop();
+
+    const choice  = reply?.choices?.[0] ?? {};
+    const message = choice.message ?? {};
+
+    // A truncated reply means half a tool call. Do not dispatch it.
+    if (choice.finish_reason === &#x27;length&#x27; &amp;&amp; !message.tool_calls?.length) {
+      messages.push({ role: &#x27;assistant&#x27;, content: message.content ?? &#x27;&#x27; });
+      messages.push({ role: &#x27;user&#x27;, content: &#x27;You were cut off by the length limit. Continue with smaller tool calls.&#x27; });
+      continue;
+    }
+
+    messages.push(sanitizeAssistant(message));
+    const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+
+    if (calls.length === 0) {
+      log(ui.answer((message.content ?? &#x27;(no answer)&#x27;).trim()));
+      return { ok: true, answer: message.content ?? &#x27;&#x27;, messages, steps: step };
+    }
+
+    for (const call of calls) {
+      const name    = call.function?.name ?? &#x27;(unnamed)&#x27;;
+      const rawArgs = call.function?.arguments ?? &#x27;{}&#x27;;
+      log(ui.tool(name, rawArgs));
+
+      const result = await runTool(name, rawArgs, ctx);
+      log(ui.result(result));
+
+      messages.push({ role: &#x27;tool&#x27;, tool_call_id: call.id, content: String(result) });
+    }
+  }
+
+  return { ok: false, reason: &#x27;max_steps&#x27;, messages };
+}</pre></figure>
+<h3>The seven beats</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>What happens</th><th>Where</th></tr></thead><tbody><tr><td>1</td><td>A step heading is printed and a 5-second heartbeat is armed, so a slow provider never looks like a frozen program.</td><td><code>agent.js:52&ndash;57</code></td></tr><tr><td>2</td><td>One model call: the <em>entire</em> message array plus the six tool schemas. Nothing else is sent.</td><td><code>agent.js:59</code></td></tr><tr><td>3</td><td>A truncated reply (<code>finish_reason: "length"</code> with no tool calls) is never dispatched as half a call; the model is told to continue smaller.</td><td><code>agent.js:71</code></td></tr><tr><td>4</td><td>The assistant message is pushed back into history, stripped to the fields an agent needs.</td><td><code>agent.js:78</code></td></tr><tr><td>5</td><td>No tool calls means the model is finished: print the answer, return <code>ok: true</code>.</td><td><code>agent.js:83</code></td></tr><tr><td>6</td><td>Each tool call is dispatched, its result logged, and the string appended as a <code>role: "tool"</code> message.</td><td><code>agent.js:90&ndash;100</code></td></tr><tr><td>7</td><td>Loop. The next request now holds the model's own intention <em>and</em> the world's answer to it.</td><td><code>agent.js:52</code></td></tr></tbody></table></div><div class="callout "><strong>The loop is the agent.</strong> Delete the <code>for</code> and you have a chatbot with tools it
+will never call. Keep it, and the model can look, act, observe and try again &mdash; which is the entire
+difference between "answers questions about your code" and "changes your code".</div>
+</section>
+
+<section id="model">
+<h2><span class="num">04</span><span>The model call</span></h2>
+
+<p>There is no SDK in this project, on purpose. A tool-calling request to an OpenAI-compatible endpoint is a
+POST with three interesting fields: <code>model</code>, <code>messages</code> and <code>tools</code>. The whole
+client is 66 lines (<code>src/llm.js</code>).</p>
+<figure class="code"><figcaption><span>src/llm.js</span><span class="lang">javascript</span></figcaption><pre>export async function chat({ apiKey, model, messages, tools, signal, timeoutMs = 90_000 }) {
+  if (!apiKey) throw new Error(&#x27;OPENROUTER_API_KEY is not set&#x27;);
+
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const abort = signal ? AbortSignal.any([signal, timeout]) : timeout;
+
+  const res = await fetch(&#x27;https://openrouter.ai/api/v1/chat/completions&#x27;, {
+    method: &#x27;POST&#x27;,
+    signal: abort,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      &#x27;Content-Type&#x27;: &#x27;application/json&#x27;,
+      &#x27;X-Title&#x27;: &#x27;min-coding-agent&#x27;,
+    },
+    body: JSON.stringify({ model, messages, tools, max_tokens: 2048 }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    const hint = res.status === 401 ? &#x27; (bad or revoked key)&#x27;
+      : res.status === 402 ? &#x27; (out of credits)&#x27; : &#x27;&#x27;;
+    throw new Error(`OpenRouter ${res.status}${hint}: ${text.slice(0, 400)}`);
+  }
+  return JSON.parse(text);
+}</pre></figure>
+<p>Two details are worth a minute on stage.</p>
+<ul><li><strong><code>AbortSignal.timeout</code> is the entire liveness story at the transport layer.</strong> A
+    socket that never answers becomes an error after 90 seconds instead of a hung agent. The heartbeat in
+    <code>agent.js</code> covers the same worry at the human layer: <code>… still waiting for the model (25s)</code>.</li><li><strong>Failures here <em>throw</em>; failures in a tool do not.</strong> A bad key, a 402, a dropped
+    connection is not something the model can fix, so it stops the run with exit code 1. A failed edit <em>is</em>
+    something the model can fix, so it comes back as text.</li></ul>
+<h3>Sanitising the assistant message</h3>
+
+<p>Providers return extra fields on the assistant message &mdash; <code>reasoning</code>,
+<code>reasoning_content</code>, refusal blocks, annotations. Echoing them back re-sends the model's private
+scratchpad on every subsequent step: tokens you pay for, and a context that fills with stale thinking.</p>
+<figure class="code"><figcaption><span>src/llm.js</span><span class="lang">javascript</span></figcaption><pre>export function sanitizeAssistant(message) {
+  const out = { role: &#x27;assistant&#x27;, content: message.content ?? &#x27;&#x27; };
+  if (Array.isArray(message.tool_calls) &amp;&amp; message.tool_calls.length &gt; 0) {
+    out.tool_calls = message.tool_calls;
+    if (message.content == null) delete out.content;
+  }
+  return out;
+}</pre></figure>
+<p><code>max_tokens: 2048</code> is deliberately small: it keeps each step cheap and keeps whole files out of a
+single reply. The cost is that long answers get cut off &mdash; which is exactly what the truncation guard in
+the loop is for.</p>
+
+</section>
+
+<section id="messages">
+<h2><span class="num">05</span><span>Messages are the memory</span></h2>
+
+<p>The <code>messages</code> array is the agent's entire working state. There is no database, no scratchpad
+file, no summary of what happened earlier. Delete the array and the agent has no idea it ever did anything.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Role</th><th>Who writes it</th><th>What it carries</th></tr></thead><tbody><tr><td><code>system</code></td><td>you</td><td>The job description: five numbered rules about looking before writing, copying snippets exactly, running what it wrote, and stopping when done.</td></tr><tr><td><code>user</code></td><td>you</td><td>The task &mdash; one plain sentence, or one corrective nudge (the truncation message is also a <code>user</code> turn).</td></tr><tr><td><code>assistant</code></td><td>the model</td><td><code>content</code> (its thinking, printed as <code>think:</code>) and possibly <code>tool_calls</code> &mdash; its intentions.</td></tr><tr><td><code>tool</code></td><td>the harness</td><td>One string per call, tagged with the <code>tool_call_id</code> it answers. The only way the model learns what happened.</td></tr></tbody></table></div>
+<p>After three steps of the demo run, the array looks like this &mdash; JSON shortened, structure untouched:</p>
+<figure class="code"><figcaption><span>the array mid-run</span><span class="lang">json</span></figcaption><pre>[
+  { &quot;role&quot;: &quot;system&quot;,    &quot;content&quot;: &quot;You are a small coding agent working inside a sandboxed folder. ...&quot; },
+  { &quot;role&quot;: &quot;user&quot;,      &quot;content&quot;: &quot;Show the loop: create a script, run it, edit it, run it again.&quot; },
+
+  { &quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;Creating a script, then running it to check it works.&quot;,
+    &quot;tool_calls&quot;: [{ &quot;id&quot;: &quot;c1&quot;, &quot;type&quot;: &quot;function&quot;,
+                     &quot;function&quot;: { &quot;name&quot;: &quot;create_file&quot;, &quot;arguments&quot;: &quot;{\&quot;path\&quot;:\&quot;demo/hello.js\&quot;,...}&quot; } }] },
+
+  { &quot;role&quot;: &quot;tool&quot;, &quot;tool_call_id&quot;: &quot;c1&quot;, &quot;content&quot;: &quot;created demo/hello.js (72 bytes)&quot; },
+
+  { &quot;role&quot;: &quot;assistant&quot;, &quot;content&quot;: &quot;Now run it.&quot;,
+    &quot;tool_calls&quot;: [{ &quot;id&quot;: &quot;c2&quot;, &quot;type&quot;: &quot;function&quot;,
+                     &quot;function&quot;: { &quot;name&quot;: &quot;run_command&quot;, &quot;arguments&quot;: &quot;{\&quot;command\&quot;:\&quot;node demo/hello.js\&quot;}&quot; } }] },
+
+  { &quot;role&quot;: &quot;tool&quot;, &quot;tool_call_id&quot;: &quot;c2&quot;, &quot;content&quot;: &quot;exit code 0\nstdout:\nHello from a tiny agent&quot; }
+]</pre></figure>
+<p>This is also where the format gets strict. <strong>Every <code>tool_call_id</code> must get a matching
+<code>tool</code> message</strong>, or the next request is rejected by the provider as malformed. That is why the
+push happens inside the same <code>for</code> that ran the tool &mdash; even when the tool returned an
+<code>ERROR</code> string, because an error is still an answer.</p>
+<div class="callout "><strong>Prompt design lives in three places, all of them ordinary code.</strong> The
+<code>SYSTEM_PROMPT</code> in <code>agent.js</code> (how to work), the schema descriptions in
+<code>tools.js</code> (what each tool is for), and the error strings the handlers return (how to recover).
+There is no separate "prompt file" to load at runtime.</div>
+</section>
+
+<section id="tools">
+<h2><span class="num">06</span><span>The six tools</span></h2>
+
+<p>A tool is two things that must agree: a JSON schema the model reads, and a JavaScript function that runs
+when the model names it. The model never touches the filesystem &mdash; it emits JSON naming a tool, and the
+harness executes it.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Tool</th><th>What it does</th></tr></thead><tbody><tr><td><code>list_files</code></td><td>Recursive listing, depth 3 by default (max 6), skipping <code>node_modules</code>, <code>.git</code>, <code>.venv</code>, <code>__pycache__</code>. Capped at 200 entries.</td></tr><tr><td><code>read_file</code></td><td>Line-numbered, paged via <code>offset</code>/<code>limit</code>, and says how many lines remain.</td></tr><tr><td><code>create_file</code></td><td><strong>Fails</strong> if the file already exists &mdash; forces the model to edit rather than clobber.</td></tr><tr><td><code>write_file</code></td><td>Create or completely overwrite; parent folders are made for you.</td></tr><tr><td><code>edit_file</code></td><td>Exact-snippet replace. Zero matches is an error; more than one is an error unless <code>replace_all</code>.</td></tr><tr><td><code>run_command</code></td><td>Shell in the workspace root, 30&nbsp;s timeout, returns exit code plus stdout and stderr.</td></tr></tbody></table></div>
+<h3>The schema is the prompt</h3>
+
+<p>When the model chooses a tool it reads nothing but these descriptions. That makes them the highest-leverage
+text in the codebase &mdash; and the place to fix a model that keeps picking the wrong tool.</p>
+<figure class="code"><figcaption><span>one schema from src/tools.js</span><span class="lang">javascript</span></figcaption><pre>{
+  type: &#x27;function&#x27;,
+  function: {
+    name: &#x27;create_file&#x27;,
+    description: &#x27;Create a NEW file with the given content. Fails if the file already exists - use edit_file or write_file for existing files.&#x27;,
+    parameters: {
+      type: &#x27;object&#x27;,
+      properties: {
+        path:    { type: &#x27;string&#x27;, description: &#x27;File path relative to the workspace root&#x27; },
+        content: { type: &#x27;string&#x27;, description: &#x27;Full file content&#x27; },
+      },
+      required: [&#x27;path&#x27;, &#x27;content&#x27;],
+      additionalProperties: false,
+    },
+  },
+}</pre></figure>
+<p>Note what the description does: it states the <em>precondition</em> ("fails if the file already exists") and
+names the alternative. A model told that reaches for <code>edit_file</code> instead of blindly overwriting.
+<code>additionalProperties: false</code> matters too &mdash; it discourages invented arguments, and the
+dispatcher rejects wrong types anyway.</p>
+
+<h3>The dispatcher</h3>
+<figure class="code"><figcaption><span>src/tools.js</span><span class="lang">javascript</span></figcaption><pre>export async function runTool(name, rawArgs, ctx) {
+  if (!HANDLERS[name]) {
+    return `ERROR: unknown tool &quot;${name}&quot;. Available: ${Object.keys(HANDLERS).join(&#x27;, &#x27;)}`;
+  }
+  const { args, error } = validate(name, rawArgs);
+  if (error) return error;
+
+  try {
+    return await HANDLERS[name](ctx.workspace, args, ctx);
+  } catch (err) {
+    if (err instanceof PathError) return `ERROR: ${err.message}`;
+    return `ERROR: ${err.code ?? &#x27;failed&#x27;}: ${err.message}`;
+  }
+}</pre></figure>
+<p>Three rules are visible in those lines and they hold for every tool:</p>
+<ul><li><strong>It returns a string, always.</strong> Success, denial, unexpected exception &mdash; everything is
+    text the model will read on the next step. A thrown error would escape the loop and end the run; a returned
+    <code>ERROR: …</code> is an observation the model can act on.</li><li><strong>Arguments are parsed and typed before dispatch.</strong> <code>validate()</code> catches the common
+    failure of a model sending <code>"limit": "20"</code> instead of <code>20</code>, and answers with
+    <code>ERROR: "limit" must be a integer, got string</code> rather than a confusing crash two frames down.</li><li><strong>Unknown names are survivable.</strong> A hallucinated tool name gets a helpful list back and the
+    loop keeps going. Models do this; the harness is expected to be patient about it.</li></ul><div class="callout "><strong>Exit codes close the loop.</strong> <code>run_command</code> reports
+<code>exit code 0</code> versus <code>exit code 1</code> as text, which is how the agent knows whether the code it
+just wrote actually works. A tool that returned only stdout would let a failing script look like a success.</div>
+</section>
+
+<section id="edit">
+<h2><span class="num">07</span><span>edit_file, the interesting one</span></h2>
+
+<p>Five of the six tools are obvious. <code>edit_file</code> is the one that teaches something, because it is
+where an agent's output is most likely to be subtly wrong, and where good harness design turns that into a
+recoverable moment instead of a corrupted file.</p>
+<figure class="code"><figcaption><span>src/tools.js (condensed)</span><span class="lang">javascript</span></figcaption><pre>edit_file(ws, args) {
+  const target = ws.resolve(args.path);
+  if (!fs.existsSync(target.abs)) return `ERROR: no such file: ${target.rel}`;
+
+  const oldStr = String(args.old_string);
+  const newStr = String(args.new_string);
+  if (oldStr === &#x27;&#x27;) return &#x27;ERROR: old_string must not be empty&#x27;;
+
+  const source = fs.readFileSync(target.abs, &#x27;utf8&#x27;);
+  const count = source.split(oldStr).length - 1;
+
+  if (count === 0) {
+    return `ERROR: old_string not found in ${target.rel}. Read the file and copy the snippet exactly, including whitespace.`;
+  }
+  if (count &gt; 1 &amp;&amp; !args.replace_all) {
+    return `ERROR: old_string appears ${count} times in ${target.rel}. Add surrounding context to make it unique, or pass replace_all: true.`;
+  }
+
+  const updated = args.replace_all
+    ? source.split(oldStr).join(newStr)
+    : source.replace(oldStr, () =&gt; newStr);   // function form: no $1 surprises
+  fs.writeFileSync(target.abs, updated, &#x27;utf8&#x27;);
+
+  return `edited ${target.rel}: ${args.replace_all ? count : 1} replacement(s), first at line ${lineNo}`;
+}</pre></figure>
+<h3>Every failure mode, and why it is a message</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>Situation</th><th>What comes back</th><th>Why that is right</th></tr></thead><tbody><tr><td>Snippet is not in the file</td><td><code>ERROR: old_string not found … copy the snippet exactly, including whitespace.</code></td><td>The model hallucinated whitespace. The message says what to do next, so the following step usually fixes it.</td></tr><tr><td>Snippet appears 4 times</td><td><code>ERROR: old_string appears 4 times … pass replace_all: true</code></td><td>Silent first-match replacement would edit the wrong function. Ambiguity must be an error, not a guess.</td></tr><tr><td>Snippet is <code>""</code></td><td><code>ERROR: old_string must not be empty</code></td><td>An empty search string would otherwise "match" everywhere.</td></tr><tr><td>Replacement contains <code>$1</code></td><td>replaced literally</td><td><code>String.replace</code> interprets <code>$1</code> when the second argument is a string; the callback form removes the footgun.</td></tr><tr><td>File does not exist</td><td><code>ERROR: no such file: …</code></td><td>Points at the missing step without being asked.</td></tr></tbody></table></div>
+<p>This is the clearest demonstration of the fourth principle on the page: <strong>an error is an observation,
+not a crash</strong>. The failure costs one step and arrives as a sentence the model can read, which is why a
+live demo should include a forced failure &mdash; ask the agent to edit something in a way that cannot match,
+and watch the loop absorb it.</p>
+
+</section>
+
+<section id="sandbox">
+<h2><span class="num">08</span><span>The sandbox</span></h2>
+
+<p>Every file tool resolves its path through one function, <code>Workspace.resolve()</code>. If a path cannot be
+proven to be inside <code>workspace/</code>, the tool refuses before a single byte is written.</p>
+<figure class="code"><figcaption><span>src/workspace.js</span><span class="lang">javascript</span></figcaption><pre>resolve(requested) {
+  const raw = requested.trim();
+  const expanded = expandVars(raw);                      // ~ and %VAR% and $VAR
+
+  if (/^[A-Za-z]:/.test(raw))        throw new PathError(`absolute or drive-relative path is outside the workspace: ${raw}`);
+  if (/^(\\\\|\/\/)/.test(raw))   throw new PathError(`UNC path is outside the workspace: ${raw}`);
+  if (path.isAbsolute(expanded))     throw new PathError(`absolute path is outside the workspace: ${raw}`);
+
+  const first = raw.split(/[\\/]/)[0].toLowerCase().replace(/:$/, &#x27;&#x27;);
+  if (/^[~$%]/.test(first) &amp;&amp; first !== raw)
+    throw new PathError(`home/environment path is outside the workspace: ${raw}`);
+  if (HOME_AND_SYSTEM.has(first))
+    throw new PathError(`&quot;${first}&quot; looks like a home/system folder, not a workspace file: ${raw}`);
+
+  const abs  = path.resolve(this.root, expanded);
+  const real = realResolve(abs);                         // deepest existing ancestor, realpath&#x27;d
+  if (!isInside(this.root, real)) throw new PathError(`path escapes the workspace: ${raw}`);
+
+  return { abs: real, rel: path.relative(this.root, real) };
+}</pre></figure>
+<p>The interesting part is that a plain <code>path.resolve</code> plus <code>startsWith</code> check is not
+enough on Windows, because several ordinary-looking strings resolve <em>inside</em> the workspace root:</p>
+<div class="table-wrap"><table class=""><thead><tr><th>The model asks for</th><th>What happens</th><th>Why a naive check fails</th></tr></thead><tbody><tr><td><code>C:\Windows\x.txt</code></td><td>refused: absolute or drive-relative path</td><td>The regex fires before <code>path.resolve</code> can reinterpret <code>C:</code>.</td></tr><tr><td><code>\\server\share\x</code></td><td>refused: UNC path</td><td>UNC paths bypass drive-rooted containment entirely.</td></tr><tr><td><code>~/notes.txt</code></td><td>refused: home/environment path</td><td><code>~</code> expands to the home directory after resolution.</td></tr><tr><td><code>%USERPROFILE%\x</code></td><td>refused: home/environment path</td><td>Environment expansion is not traversal, so <code>..</code> checks miss it.</td></tr><tr><td><code>Desktop\notes.txt</code></td><td>refused: looks like a home/system folder</td><td>With the cwd inside a user profile this resolves happily to a real Desktop.</td></tr><tr><td><code>../../secrets.txt</code></td><td>refused: path escapes the workspace</td><td>Caught late, by the containment check.</td></tr><tr><td><code>link-to-home\x</code></td><td>refused: path escapes the workspace</td><td>A junction would pass a string check; <code>realResolve</code> follows it first.</td></tr></tbody></table></div>
+<p><code>realResolve</code> exists for the last row: it walks up to the deepest ancestor that exists, resolves
+<em>that</em> with <code>fs.realpathSync</code>, then re-appends the not-yet-created tail. A junction pointing out
+of the sandbox is compared by its real target, not by its name. The tests cover every shape in the table.</p>
+<div class="callout warn"><strong>The honest limit.</strong> <code>run_command</code> is a real shell. It <em>starts</em> in
+<code>workspace/</code>, but nothing stops a command from walking out of that folder &mdash; the directory is not
+an operating-system sandbox. Isolation is a container's job. Saying this out loud beats implying the demo is safe
+by construction.</div>
+</section>
+
+<section id="policy">
+<h2><span class="num">09</span><span>Human in the loop</span></h2>
+
+<p>Everything so far lets a model act. This chapter is the part that lets <em>you</em> decide how much. There is
+one setting, <code>CMD_POLICY</code>, and it governs the only tool that can do damage a file check cannot
+contain: <code>run_command</code>.</p>
+<div class="table-wrap"><table class=""><thead><tr><th><code>CMD_POLICY</code></th><th>Behaviour</th><th>When you would use it</th></tr></thead><tbody><tr><td><code>ask</code> <span class="tag">default</span></td><td>Every command stops and waits for a <code>y/N</code> at the terminal. <code>n</code> returns <code>DENIED: the user did not approve this command.</code> to the model.</td><td>Live demos, and any run you are watching. The pause is the point.</td></tr><tr><td><code>allow</code></td><td>Commands run without asking. Set by <code>--yes</code> / <code>--allow-commands</code>, or by <code>CMD_POLICY=allow</code>.</td><td>The scripted demo, CI, or a task you already trust.</td></tr><tr><td><code>deny</code></td><td>No command runs at all; the model gets a denial and can still edit files.</td><td>Read-mostly tasks, or a run with no terminal attached.</td></tr></tbody></table></div>
+<p>The approval sits in the handler, not in the loop, so a denied command behaves like any other observation:</p>
+<figure class="code"><figcaption><span>src/tools.js (condensed)</span><span class="lang">javascript</span></figcaption><pre>async run_command(ws, args, ctx) {
+  const command = String(args.command ?? &#x27;&#x27;).trim();
+  if (!command) return &#x27;ERROR: command is required&#x27;;
+
+  for (const { re, why } of HARD_DENY) {
+    if (re.test(command)) return `DENIED: blocked by policy (${why}). Command: ${command}`;
+  }
+
+  const policy = ctx.commandPolicy;
+  if (policy === &#x27;deny&#x27;) return &#x27;DENIED: command execution is disabled (CMD_POLICY=deny).&#x27;;
+
+  const approval = policy === &#x27;allow&#x27; ? &#x27;allow&#x27; : await ctx.confirm(command);
+  if (approval !== &#x27;allow&#x27;) return `DENIED: the user did not approve this command. Command: ${command}`;
+
+  const { code, stdout, stderr } = await runShell(command, ws.root);
+  ...
+}</pre></figure>
+<h3>What is refused no matter what the policy says</h3>
+
+<p>Eight patterns are checked before the policy is consulted, so <code>allow</code> cannot unblock them. They are
+not a security boundary &mdash; they are a seatbelt against a model that has read too many bad shell examples.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Pattern</th><th>Refused because</th></tr></thead><tbody><tr><td><code>rm -rf /</code>, <code>rm -rf ~</code></td><td>recursive delete of a root path</td></tr><tr><td><code>del /s</code>, <code>del /q</code></td><td>recursive or quiet Windows delete</td></tr><tr><td><code>format</code>, <code>diskpart</code></td><td>disk formatting</td></tr><tr><td><code>shutdown</code>, <code>reboot</code></td><td>machine power control</td></tr><tr><td><code>git push --force</code>, <code>git push -f</code></td><td>force push</td></tr><tr><td><code>curl … | sh</code>, <code>wget … | bash</code></td><td>piping the internet into a shell</td></tr><tr><td><code>:(){ :|:& };:</code></td><td>fork bomb</td></tr><tr><td><code>&gt; /dev/sda</code></td><td>raw disk write</td></tr></tbody></table></div><div class="callout "><strong>The non-TTY rule.</strong> With no terminal attached (piped input, CI, a scheduled run) the
+<code>ask</code> policy degrades to <strong>deny</strong>. An unanswerable prompt must never become an approval
+&mdash; the <code>confirm</code> function defaults to <code>async () =&gt; 'deny'</code> for exactly this reason.</div>
+</section>
+
+<section id="ui">
+<h2><span class="num">10</span><span>The console palette</span></h2>
+
+<p>One file knows about colour. Every line the agent prints is a named helper in <code>src/ui.js</code>, so the
+loop itself contains no escape codes and the whole palette can be swapped in one place.</p>
+<figure class="code"><figcaption><span>src/ui.js (condensed)</span><span class="lang">javascript</span></figcaption><pre>export const ui = {
+  title:   (text) =&gt; chalk.bold.cyan(text),
+  field:   (label) =&gt; `${chalk.green(label)} ${chalk.white(&#x27;›&#x27;)}`,
+  kv:      (label, value) =&gt; `${chalk.blue(`${label.padEnd(10)}:`)} ${chalk.white(value)}`,
+  step:    (step, max, width = 40) =&gt; chalk.blue(`── step ${step}/${max} ${&#x27;─&#x27;.repeat(width)}`),
+  think:   (text) =&gt; `${chalk.cyan(&#x27;think:&#x27;)} ${text}`,
+  tool:    (name, args) =&gt; `${chalk.white(&#x27;tool →&#x27;)} ${chalk.yellow(name)} ${chalk.white(args)}`,
+  result:  (text) =&gt; isFailure(firstLine(text))
+             ? chalk.red(`result ← ${firstLine(text)}`)
+             : `${chalk.green(&#x27;result ←&#x27;)} ${chalk.white(firstLine(text))}`,
+  answerRule: () =&gt; chalk.bold.green(`── final answer ${&#x27;─&#x27;.repeat(38)}`),
+  answer:  (text) =&gt; chalk.white(text),
+  warn:    (text) =&gt; chalk.yellowBright(text),
+  waiting: (text) =&gt; chalk.yellowBright(text),
+  error:   (text) =&gt; chalk.red(text),
+  note:    (text) =&gt; chalk.white(text),
+  prompt:  (text) =&gt; chalk.green(text),
+  dim:     (text) =&gt; chalk.dim(text),
+};</pre></figure>
+<p>Two design decisions make this more than cosmetics.</p>
+<ul><li><strong>chalk styles the exact string you hand it.</strong> There is no markup to parse, so text from the
+    model or a tool prints verbatim: a file containing <code>&lt;red&gt;</code> shows up as
+    <code>&lt;red&gt;</code>, and Windows backslashes and JSON survive intact. A console library that interprets
+    inline tags would quietly corrupt the very output the audience is reading.</li><li><strong>Every helper returns a string and nothing writes to stdout.</strong> That is why
+    <code>runTask</code> can take an injected <code>log</code>, and why the loop can be tested without capturing a
+    terminal.</li></ul>
+<p>The colour of a result is derived, not reported by the tool: <code>isFailure</code> looks for
+<code>ERROR</code>, <code>DENIED</code> or an exit code other than 0 in the first line.</p>
+<figure class="code"><figcaption><span>src/ui.js</span><span class="lang">javascript</span></figcaption><pre>const isFailure = (text) =&gt; /^(ERROR|DENIED)\b/.test(text) || /\bexit code (?!0\b)\d+/.test(text);</pre></figure>
+<p>That small regex is the visual contract of the whole demo: <strong>anything red means the model has a problem
+to solve on the next step</strong>. chalk decides whether to colour at all &mdash; <code>NO_COLOR</code>,
+<code>FORCE_COLOR</code> and "output is a pipe" are all honoured &mdash; so redirecting a run to a file gives
+clean text.</p>
+
+</section>
+
+<section id="config">
+<h2><span class="num">11</span><span>Configuration and precedence</span></h2>
+
+<p>Three sources compete for the key and the model name, and the winner is printed on every start with its
+provenance. The ladder is deliberately <em>not</em> the usual one:</p>
+<figure class="ascii"><figcaption><span>precedence</span></figcaption><pre>--model  flag          ← highest
+.env  (nearest file)  ← beats the shell, on purpose
+exported environment  ← lowest for anything .env defines</pre></figure>
+<p><code>.env</code> beating the shell is a choice, not an accident: a stale <code>OPENROUTER_API_KEY</code> in
+<code>~/.bashrc</code> would otherwise silently outrank the key you just wrote, and you would spend an afternoon
+on a 401. Variables <code>.env</code> does not mention still come from the environment.</p>
+
+<p>Finding the file is a walk upwards, so the single <code>.env</code> at the repository root works for a package
+one level down:</p>
+<figure class="code"><figcaption><span>src/config.js</span><span class="lang">javascript</span></figcaption><pre>export function findEnvFile(startDir = PROJECT_ROOT) {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    const candidate = path.join(dir, &#x27;.env&#x27;);
+    if (fs.existsSync(candidate) &amp;&amp; fs.statSync(candidate).isFile()) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;      // filesystem root: stop
+    dir = parent;
+  }
+}</pre></figure>
+<h3>The knobs</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>Variable</th><th>Default</th><th>What it does</th></tr></thead><tbody><tr><td><code>OPENROUTER_API_KEY</code> / <code>OPENROUTER_KEY</code></td><td>required</td><td>The key. Only ever printed as <code>sk-or...aaa5 (73 chars)</code>.</td></tr><tr><td><code>OPENROUTER_MODEL</code> / <code>MODEL</code></td><td><code>deepseek/deepseek-v4.1-flash-1017</code></td><td>Which model. <code>MODEL=</code> is an alias for older <code>.env</code> files in this repo.</td></tr><tr><td><code>CMD_POLICY</code></td><td><code>ask</code></td><td><code>allow</code> / <code>ask</code> / <code>deny</code>.</td></tr><tr><td><code>MAX_STEPS</code></td><td><code>12</code></td><td>How many model calls the loop may make.</td></tr><tr><td><code>REQUEST_TIMEOUT_MS</code></td><td><code>90000</code></td><td>Per-call transport timeout.</td></tr><tr><td><code>WORKSPACE_DIR</code></td><td><code>workspace</code></td><td>The sandbox root, resolved against the package.</td></tr></tbody></table></div>
+<h3>Two small kindnesses</h3>
+<ul><li><strong>Fingerprinting instead of printing.</strong> <code>fingerprint()</code> returns
+    <code>sk-or...aaa5 (73 chars)</code> &mdash; enough to tell two keys apart on stage, useless in a screenshot.</li><li><strong>Normalising bare model names.</strong> OpenRouter needs <code>vendor/model</code>, and a
+    <code>.env</code> carried over from another project usually holds <code>gpt-5</code>. A prefix table maps
+    <code>deepseek*</code>, <code>claude*</code>, <code>gpt*</code>, <code>gemini*</code>, <code>grok*</code>,
+    <code>llama*</code>, <code>qwen*</code>, <code>mistral*</code> to a vendor, and the banner says when it
+    guessed.</li></ul><figure class="code"><figcaption><span>src/config.js</span><span class="lang">javascript</span></figcaption><pre>const VENDOR_BY_PREFIX = [
+  [/^deepseek/i, &#x27;deepseek&#x27;],   [/^claude/i, &#x27;anthropic&#x27;],   [/^(gpt|o[13458]|chatgpt)/i, &#x27;openai&#x27;],
+  [/^gemini/i, &#x27;google&#x27;],       [/^grok/i, &#x27;x-ai&#x27;],           [/^llama/i, &#x27;meta-llama&#x27;],
+  [/^qwen/i, &#x27;qwen&#x27;],           [/^mistral|^mixtral/i, &#x27;mistralai&#x27;],
+];</pre></figure>
+</section>
+
+<section id="bounds">
+<h2><span class="num">12</span><span>Bounded autonomy</span></h2>
+
+<p>An agent that can loop is an agent that can loop forever. Four bounds cap it, and each one has a visible
+consequence rather than a silent stall.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Bound</th><th>What it prevents</th><th>What you see</th></tr></thead><tbody><tr><td><code>maxSteps</code> (12)</td><td>A model that keeps reading files and never concludes.</td><td><code>stopped: hit the 12-step limit</code>, exit code 3.</td></tr><tr><td><code>finish_reason: length</code> guard</td><td>Half a tool call, dispatched as JSON that will not parse.</td><td><code>reply was truncated - asking the model to continue smaller</code>.</td></tr><tr><td><code>REQUEST_TIMEOUT_MS</code> (90&nbsp;s)</td><td>A socket that never answers.</td><td><code>request failed: request timed out after 90s</code>, exit code 1.</td></tr><tr><td><code>run_command</code> timeout (30&nbsp;s)</td><td>A command that hangs the whole run.</td><td><code>[tool] command timed out after 30s</code> in the stderr block.</td></tr></tbody></table></div>
+<h3>The heartbeat</h3>
+
+<p>Between them, those bounds would still leave a 90-second silence, which on a projector looks identical to a
+crash. So a timer prints something every five seconds while the request is in flight:</p>
+<figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>function heartbeat(log, everyMs = 5000) {
+  const started = Date.now();
+  const timer = setInterval(() =&gt; {
+    const seconds = Math.round((Date.now() - started) / 1000);
+    log(ui.waiting(`  … still waiting for the model (${seconds}s)`));
+  }, everyMs);
+  timer.unref?.();                              // never keep the process alive on its own
+  return { stop: () =&gt; clearInterval(timer) };
+}</pre></figure>
+<p>It is armed just before the call and stopped just after, including on the failure path. <code>unref()</code>
+matters: a timer that holds the event loop open would turn a clean exit into a program that hangs for five more
+seconds.</p>
+
+<h3>Exit codes</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>Code</th><th>Meaning</th></tr></thead><tbody><tr><td>0</td><td>The model stopped calling tools and gave an answer.</td></tr><tr><td>1</td><td>The request failed &mdash; bad key, no credits, timeout, non-JSON.</td></tr><tr><td>2</td><td>No task: nothing typed at the prompt, the field closed, or stdin is not a terminal.</td></tr><tr><td>3</td><td>Stopped at the step limit.</td></tr></tbody></table></div><div class="callout "><strong>Why the truncation guard is the interesting one.</strong> A cut-off reply often ends
+mid-JSON: <code>{"path": "hello.js", "cont</code>. Dispatching that would produce
+<code>ERROR: could not parse arguments</code> for a tool call the model never finished, and the model would spend
+a step apologising for a bug it did not have. Refusing to dispatch it is the difference between a harness that
+respects the model and one that argues with it.</div>
+</section>
+
+<section id="trace">
+<h2><span class="num">13</span><span>A real run, annotated</span></h2>
+
+<p>Everything on this page so far is description. This is a real run, captured from
+<code>node src/agent.js --demo</code> with colour disabled, unedited:</p>
+<figure class="code"><figcaption><span>terminal</span><span class="lang">console</span></figcaption><pre>min-coding-agent
+workspace : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-agent\workspace
+model     : scripted (no network)
+key       : -
+env file  : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\.env
+commands  : allow
+timeout   : 90s per model call
+tools     : list_files, read_file, create_file, write_file, edit_file, run_command
+
+task      : Show the loop: create a script, run it, edit it, run it again.
+
+
+── step 1/12 ────────────────────────────────────────
+think: Creating a script, then running it to check it works.
+tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;const name = &#x27;tiny agent&#x27;;\nconsole.log(`Hello from a ${name}`);\n&quot;}
+result ← ERROR: demo/hello.js already exists - use edit_file to change it or write_file to overwrite
+
+── step 2/12 ────────────────────────────────────────
+think: Now run it.
+tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+result ← exit code 0
+
+── step 3/12 ────────────────────────────────────────
+think: Fixing the copy in the script.
+tool → edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&quot;:&quot;Hello from a ${name}&quot;,&quot;new_string&quot;:&quot;Hello from a ${name}, edited by a tool call&quot;}
+result ← edited demo/hello.js: 1 replacement(s), first at line 2
+
+── step 4/12 ────────────────────────────────────────
+think: Re-running to verify the edit.
+tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+result ← exit code 0
+
+── step 5/12 ────────────────────────────────────────
+think: Done. Created demo/hello.js, ran it, edited one string, re-ran it. The exit codes came back 0 both times.
+
+── final answer ──────────────────────────────────────
+Done. Created demo/hello.js, ran it, edited one string, re-ran it. The exit codes came back 0 both times.</pre></figure>
+<h3>What to point at</h3>
+<ul><li><strong>Step 1 failed, and the run carried on.</strong> <code>demo/hello.js</code> was left over from an
+    earlier run, so <code>create_file</code> refused to clobber it. That single red line is principle 4 in
+    action: the error arrives as a string, the loop continues, and the next step runs the file that is already
+    there &mdash; which is exactly what a careful human would do.</li><li><strong>The scripted demo uses the real dispatcher.</strong> <code>--demo</code> replaces only
+    <code>chatFn</code> with a fixed list of replies. <code>runTool</code>, the sandbox, the policy and the
+    palette are the production ones, so a demo with no network still fails in real ways.</li><li><strong>Step 5 has no <code>tool →</code> line.</strong> The model said it was done, the loop took the
+    <code>calls.length === 0</code> branch, printed the final answer and returned. That branch is the only way
+    out other than hitting the limit.</li><li><strong>The banner was printed before the first step.</strong> Model, key fingerprint, which
+    <code>.env</code> won, the policy, the timeout and the tool list &mdash; the whole configuration as one
+    reproducible header, which is what you want when a demo goes wrong on stage.</li></ul>
+</section>
+
+<section id="run">
+<h2><span class="num">14</span><span>Run it yourself</span></h2>
+
+<p>Node 20+ and one <code>npm install</code>. The <code>.env</code> at the repository root is found
+automatically, so nothing has to be copied for a live run.</p>
+<figure class="code"><figcaption><span>quickstart</span><span class="lang">bash</span></figcaption><pre>cd mini-coding-agent
+npm install                       # one dependency: chalk
+
+npm start                         # live model, task typed at the &quot;task ›&quot; prompt
+npm start -- &quot;create hello.js that prints today&#x27;s date and time, run it, and save its output to hello-output.txt&quot;
+npm run demo                      # scripted run: no network, no key, no excuses
+npm test                          # 40 offline tests, no key, no network
+
+node src/agent.js &quot;task&quot; --yes                # auto-approve commands
+node src/agent.js &quot;task&quot; --max-steps 6        # tighter loop
+node src/agent.js &quot;task&quot; --model anthropic/claude-sonnet-4.5
+node src/agent.js --help                      # usage summary</pre></figure>
+<p>The five-minute talk script is in the README: run <code>--demo</code> and narrate
+<em>think → tool → result → think</em>; delete <code>workspace/demo/hello.js</code> and run it live with
+<code>--yes</code>; then ask for an edit that cannot match, so the audience sees the error come back as a tool
+result and the model repair it on the next iteration.</p>
+<div class="callout "><strong>A demo that fails on purpose is worth two that succeed.</strong> The happy path shows what an
+agent does. The failure shows <em>why the loop matters</em>: it is the only structure that lets a model recover
+from being wrong, which is the thing no single completion can do.</div>
+</section>
+
+<section id="limits">
+<h2><span class="num">15</span><span>What it deliberately does not do</span></h2>
+
+<p>The limits are worth stating as plainly as the features, because each one is where a production agent grows a
+layer this demo does not have.</p>
+<ul><li><strong>The shell is not sandboxed.</strong> <code>run_command</code> starts in <code>workspace/</code> and
+    can walk out of it. File tools are contained; commands are trusted as far as your policy allows.</li><li><strong>No context management.</strong> <code>messages</code> grows with every step and nothing trims it.
+    Long runs will eventually exceed the window &mdash; which is where summarising, retrieval and compaction
+    start to matter.</li><li><strong>No streaming.</strong> Each step waits for a complete reply, so the heartbeat exists to make the
+    wait legible. Streaming would delete that problem and add a parser.</li><li><strong>No sub-agents, no retries, no skills, no memory.</strong> Every one of those is a layer on top of
+    this loop, not a replacement for it, and all of them assume the loop already works.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
+    the system prompt asks for one per step because interleaved edits are much harder to audit live.</li></ul>
+<h3>The eight principles, in one place</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Principle</th><th>Where to see it</th></tr></thead><tbody><tr><td>1</td><td>Tool calling is the model's only ability to act.</td><td><code>src/tools.js</code> &mdash; the schemas are the prompt</td></tr><tr><td>2</td><td>The loop is the agent.</td><td><code>runTask</code>, <code>agent.js:52</code></td></tr><tr><td>3</td><td>Everything is messages.</td><td>one array, four roles, no other state</td></tr><tr><td>4</td><td>Errors are observations, not crashes.</td><td><code>runTool</code>'s try/catch, <code>edit_file</code>'s errors</td></tr><tr><td>5</td><td>Exit codes close the loop.</td><td><code>exit code 0</code> versus <code>1</code> in the result string</td></tr><tr><td>6</td><td>Human in the loop.</td><td><code>CMD_POLICY=ask</code>, plus the hard-deny list</td></tr><tr><td>7</td><td>Least privilege.</td><td><code>Workspace.resolve()</code></td></tr><tr><td>8</td><td>Bounded autonomy.</td><td><code>maxSteps</code>, the truncation guard, both timeouts</td></tr></tbody></table></div>
+<p>That is the whole of it: a model, six tools, a loop with four bounds, and a sandbox. Everything else you have
+seen a coding agent do is built from these pieces &mdash; and now you know what each piece costs.</p>
+
+</section>
+
+      <p class="colophon">
+        Built from the source in <code>mini-coding-agent/</code> &mdash; every excerpt is real code with only the
+        logging lines trimmed and long lines rewrapped to fit, and the run in chapter 13 is a captured terminal
+        session.
+        Tests: <code>npm test</code> (40 offline, no key, no network). Demo: <code>npm run demo</code>.
+      </p>
+    </div>
+  </main>
+
+</div>
+<script>
+
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var heads = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
+  var bar = document.getElementById('bar');
+  var toc = document.getElementById('toc');
+  var ticking = false;
+
+  function update(){
+    ticking = false;
+    var y = window.scrollY || document.documentElement.scrollTop;
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    if (bar) bar.style.width = (max > 0 ? Math.min(100, (y / max) * 100) : 0) + '%';
+
+    var active = 0;
+    for (var i = 0; i < heads.length; i++){
+      var h = heads[i];
+      if (h && h.getBoundingClientRect().top <= 130) active = i;
+    }
+    links.forEach(function(a, i){ a.classList.toggle('active', i === active); });
+
+    var el = links[active];
+    if (el && toc && window.innerWidth > 940){
+      var lr = el.getBoundingClientRect(), tr = toc.getBoundingClientRect();
+      if (lr.top < tr.top + 4 || lr.bottom > tr.bottom - 4){
+        el.scrollIntoView({block:'nearest'});
+      }
+    }
+  }
+
+  window.addEventListener('scroll', function(){
+    if (!ticking){ ticking = true; window.requestAnimationFrame(update); }
+  }, {passive:true});
+  window.addEventListener('resize', update);
+  update();
+})();
+
+</script>
+</body>
+</html>
