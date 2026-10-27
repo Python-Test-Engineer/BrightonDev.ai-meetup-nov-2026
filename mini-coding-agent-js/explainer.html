@@ -329,7 +329,7 @@ dependency (<code>chalk</code>, for colour), no SDK, no framework. The model is 
   <div><b>6</b><span>tools</span></div>
   <div><b>9</b><span>lifecycle hooks</span></div>
   <div><b>1</b><span>dependency</span></div>
-  <div><b>63</b><span>offline tests</span></div>
+  <div><b>64</b><span>offline tests</span></div>
 </div>
 
 <h3>The whole idea, in six lines</h3>
@@ -794,9 +794,12 @@ you make this real?"</em></p>
                               SessionEnd  ← always, whichever way it went</pre></figure>
 
 <h3>Seeing it, before reading it</h3>
-<p>Two flags exist purely to make the lifecycle legible on a projector, and neither needs a key or a network:</p>
-<figure class="code"><figcaption><span>terminal</span><span class="lang">bash</span></figcaption><pre>node src/agent.js --hooks                # every hook: icon, colour, what it gets, why it exists
-node src/agent.js --demo --trace-hooks   # the same lifecycle, printed as it fires</pre></figure>
+<p>The trace is on by default: every run - <code>npm start</code> as much as <code>npm run demo</code> - prints
+each lifecycle moment as one line, tagged <code>[HOOK:Name]</code>, followed by what that moment is
+<em>for</em> and what this firing carried. It needs no key and no network, and one flag explains it:</p>
+<figure class="code"><figcaption><span>terminal</span><span class="lang">bash</span></figcaption><pre>node src/agent.js --hooks              # every hook: icon, colour, what it gets, why it exists, then exit
+node src/agent.js --demo               # the same lifecycle, printed as each moment fires
+node src/agent.js --demo --no-hooks    # the plain loop, with the trace silenced</pre></figure>
 <p><code>--hooks</code> prints the catalogue. It is generated from <code>HOOK_EVENTS</code>, the same array the
 loop fires, so this page and the console cannot drift apart:</p>
 <figure class="code"><figcaption><span>node src/agent.js --hooks</span><span class="lang">console</span></figcaption><pre>── lifecycle hooks - 9 moments in one run ──────────────────────
@@ -821,23 +824,23 @@ loop fires, so this page and the console cannot drift apart:</p>
   UserPromptSubmit (rewrite or block the task); PreToolUse (block a tool call);
   PostToolUse (replace the observation). The rest only watch - which is exactly why a
   hook is a safe first extension point.</pre></figure>
-<p><code>--trace-hooks</code> attaches one observer to every event and prints it as it fires. This is a real
-capture from <code>node src/agent.js --demo --trace-hooks</code>:</p>
-<figure class="code"><figcaption><span>the lifecycle, live</span><span class="lang">console</span></figcaption><pre>  🚀  SessionStart     Show the loop, then try to break the sandbox: create a script, ...
-  ✍️  UserPromptSubmit Show the loop, then try to break the sandbox: create a script, ...
+<p>The default trace is one observer per event, attached by <code>traceHooks()</code>. This is a real excerpt from
+<code>node src/agent.js --demo</code>; each tag is painted in its hook's own colour:</p>
+<figure class="code"><figcaption><span>the lifecycle, live</span><span class="lang">console</span></figcaption><pre>  🚀  [HOOK:SessionStart] once, before the first model call - Show the loop, then try to break the sandbox: create a script, run it, e
+  ✍️  [HOOK:UserPromptSubmit] once, as the task enters the loop - Show the loop, then try to break the sandbox: create a script, run it, e
 
 ── step 3/12 ────────────────────────────────────────
-  🧠  PreModel         step 3/12 - 6 messages
-  💬  PostModel        step 3 - tool_calls
+  🧠  [HOOK:PreModel] before every model call - step 3/12 - 6 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 3 - tool_calls
 think: Now run it - a real shell, a real exit code.
 tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
-  🛠️  PreToolUse       run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
 result ← exit code 0
-         ↳ stdout: Hello from a tiny agent, edited by a tool call
-  📦  PostToolUse      run_command - exit code 0
+         ↳ stdout: Hello from a tiny agent
+  📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 ...
-  🏁  Stop             11 step(s) - Done. Created demo/hello.js, ran it, edited one string, ...
-  🔒  SessionEnd       ok (answer) in 399ms</pre></figure>
+  🏁  [HOOK:Stop] the model answered and the loop is ending - 11 step(s) - Done. Created demo/hello.js, ran it, edited one string, 
+  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 498ms</pre></figure>
 <p>Read the trace next to chapter 03's loop and the picture is complete: the hooks sit exactly where the
 <code>hook.run(...)</code> lines are, in the same order, on the same iteration. Nothing is interleaved by
 magic.</p>
@@ -1029,70 +1032,120 @@ env file  : C:\Users\mrcra\OneDrive\Desktop\BrightonDev.ai-meetup-nov-2026\.env
 commands  : allow
 timeout   : 90s per model call
 tools     : list_files, read_file, create_file, write_file, edit_file, run_command
-hooks     : 9 available - see --hooks
+hooks     : on: each of the 9 prints as [HOOK:name] - see --hooks, silence with --no-hooks
 
 task      : Show the loop, then try to break the sandbox: create a script, run it, edit it, run it again, then attempt a path escape, a home-folder read, a force push and an API-key echo.
 
+  9 lifecycle hooks attached - each prints as it fires, e.g.
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;ls&quot;}
+  (--no-hooks hides these; --hooks explains them)
+
+  🚀  [HOOK:SessionStart] once, before the first model call - Show the loop, then try to break the sandbox: create a script, run it, e
+  ✍️  [HOOK:UserPromptSubmit] once, as the task enters the loop - Show the loop, then try to break the sandbox: create a script, run it, e
 
 ── step 1/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 1/12 - 2 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 1 - tool_calls
 think: Looking first: what is in the workspace, and what does the sandbox allow.
 tool → list_files {&quot;path&quot;:&quot;.&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - list_files {&quot;path&quot;:&quot;.&quot;}
 result ← .gitkeep  (72b)
+  📦  [HOOK:PostToolUse] after every tool call - list_files - .gitkeep  (72b)
 
 ── step 2/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 2/12 - 4 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 2 - tool_calls
 think: Creating a script, then running it to check it works.
 tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;const agent = &#x27;tiny agent&#x27;;\nconsole.log(`Hello from a ${agent}`);\n&quot;}
-result ← ERROR: demo/hello.js already exists - use edit_file to change it or write_file to overwrite
+  🛠️  [HOOK:PreToolUse] before every tool call - create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;const agent = &#x27;tiny agent
+result ← created demo/hello.js (66 bytes)
+  📦  [HOOK:PostToolUse] after every tool call - create_file - created demo/hello.js (66 bytes)
 
 ── step 3/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 3/12 - 6 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 3 - tool_calls
 think: Now run it - a real shell, a real exit code.
 tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
 result ← exit code 0
-         ↳ stdout: Hello from a tiny agent, edited by a tool call
+         ↳ stdout: Hello from a tiny agent
+  📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 
 ── step 4/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 4/12 - 8 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 4 - tool_calls
 think: Fixing the copy in the script.
 tool → edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&quot;:&quot;Hello from a ${agent}&quot;,&quot;new_string&quot;:&quot;Hello from a ${agent}, edited by a tool call&quot;}
-result ← ERROR: old_string not found in demo/hello.js. Read the file and copy the snippet exactly, including whitespace.
+  🛠️  [HOOK:PreToolUse] before every tool call - edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&quot;:&quot;Hello from a ${agent}&quot;
+result ← edited demo/hello.js: 1 replacement(s), first at line 2
+  📦  [HOOK:PostToolUse] after every tool call - edit_file - edited demo/hello.js: 1 replacement(s), first at line 2
 
 ── step 5/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 5/12 - 10 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 5 - tool_calls
 think: Re-running to verify the edit.
 tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
 result ← exit code 0
          ↳ stdout: Hello from a tiny agent, edited by a tool call
+  📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 
 ── step 6/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 6/12 - 12 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 6 - tool_calls
 think: Now the guards. First a write that tries to climb out of the workspace:
 tool → write_file {&quot;path&quot;:&quot;../escape.txt&quot;,&quot;content&quot;:&quot;this file must never be written&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - write_file {&quot;path&quot;:&quot;../escape.txt&quot;,&quot;content&quot;:&quot;this file must never be w
 result ← ERROR: path escapes the workspace: ../escape.txt
+  📦  [HOOK:PostToolUse] after every tool call - write_file - ERROR: path escapes the workspace: ../escape.txt
 
 ── step 7/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 7/12 - 14 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 7 - tool_calls
 think: Then a read from the home folder, where the private keys live:
 tool → read_file {&quot;path&quot;:&quot;~/.ssh/id_rsa&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - read_file {&quot;path&quot;:&quot;~/.ssh/id_rsa&quot;}
 result ← ERROR: absolute path is outside the workspace: ~/.ssh/id_rsa
+  📦  [HOOK:PostToolUse] after every tool call - read_file - ERROR: absolute path is outside the workspace: ~/.ssh/id_rsa
 
 ── step 8/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 8/12 - 16 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 8 - tool_calls
 think: A command the deny-list refuses no matter what CMD_POLICY says:
 tool → run_command {&quot;command&quot;:&quot;git push --force origin main&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;git push --force origin main&quot;}
 result ← DENIED: blocked by policy (force push). Command: git push --force origin main
+  📦  [HOOK:PostToolUse] after every tool call - run_command - DENIED: blocked by policy (force push). Command: git push --
 
 ── step 9/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 9/12 - 18 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 9 - tool_calls
 think: A command that asks its own child process for the API key:
 tool → run_command {&quot;command&quot;:&quot;node -e \&quot;console.log(&#x27;OPENROUTER_API_KEY=&#x27; + (process.env.OPENROUTER_API_KEY ?? &#x27;absent&#x27;))\&quot;&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;node -e \&quot;console.log(&#x27;OPENROUTER_API_KEY=&#x27; + (p
 result ← exit code 0
          ↳ stdout: OPENROUTER_API_KEY=absent
+  📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 
 ── step 10/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 10/12 - 20 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 10 - tool_calls
 think: And a command that fails, so the exit code has to explain itself:
 tool → run_command {&quot;command&quot;:&quot;node -e \&quot;process.exit(1)\&quot;&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;node -e \&quot;process.exit(1)\&quot;&quot;}
 result ← exit code 1
          ↳ exit 1: general failure - the command ran and then reported an error (uncaught exception, failed assertion, bad argument). The cause is in stderr; fix that, do not just re-run.
+  📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 1
 
 ── step 11/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 11/12 - 22 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 11 - stop
 think: Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
 
 ── final answer ──────────────────────────────────────
 Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
+  🏁  [HOOK:Stop] the model answered and the loop is ending - 11 step(s) - Done. Created demo/hello.js, ran it, edited one string, 
+  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 498ms
 
 ── sandbox checks ────────────────────────────────────────────
   ✓ file tools stay inside the workspace - ERROR: path escapes the workspace
@@ -1105,14 +1158,17 @@ Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 bot
 
 ✓ 5/5 sandbox checks held</pre></figure>
 <h3>What to point at</h3>
-<ul><li><strong>Step 1 failed, and the run carried on.</strong> <code>demo/hello.js</code> was left over from an
-    earlier run, so <code>create_file</code> refused to clobber it (step 2), and <code>edit_file</code> then
-    refused to match <code>Hello from a ${name}</code> (step 4) because the file had already been edited by a
-    previous demo. Both red lines are principle 4 in action: the error arrives as a string, the loop continues,
-    and the run still ends with an answer and a clean scorecard &mdash; which is exactly what a careful human
-    would do.</li><li><strong>The scripted demo uses the real dispatcher.</strong> <code>--demo</code> replaces only
-    <code>chatFn</code> with a fixed list of replies. <code>runTool</code>, the sandbox, the policy, the hooks
-    and the palette are the production ones, so a demo with no network still fails in real ways.</li><li><strong>Steps 6&ndash;10 are the sandbox, tested instead of described.</strong> A write to
+<ul><li><strong>Every lifecycle line is tagged <code>[HOOK:Name]</code>.</strong> Nine moments, interleaved with the
+    loop at exactly the places chapter 03 numbered: the run opens with <code>SessionStart</code> and
+    <code>UserPromptSubmit</code>, each step has <code>PreModel</code> and <code>PostModel</code>, each tool
+    call has <code>PreToolUse</code> and <code>PostToolUse</code>, and it closes with <code>Stop</code> then
+    <code>SessionEnd</code>. Nothing else about the run changed when hooks were added &mdash; that is the point
+    of putting them at the pauses rather than in the middle of the loop.</li><li><strong>Steps 1&ndash;5 are the loop, and the exit codes are the proof.</strong> <code>create_file</code>
+    reports <code>created demo/hello.js (66 bytes)</code>; <code>run_command</code> reports
+    <code>exit code 0</code> and echoes the first line the program printed
+    (<code>↳ stdout: Hello from a tiny agent</code>, so the claim is checkable); <code>edit_file</code> reports
+    <code>1 replacement(s), first at line 2</code>; the second run prints the edited text. Look → act → observe
+    → run again.</li><li><strong>Steps 6&ndash;10 are the sandbox, tested instead of described.</strong> A write to
     <code>../escape.txt</code> and a read of <code>~/.ssh/id_rsa</code> are refused <em>before</em> any disk
     access, <code>git push --force</code> is denied whatever the policy says, the child process cannot see the
     API key, and a failing command reports <code>exit code 1</code> with its meaning spelled out. The
@@ -1121,9 +1177,13 @@ Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 bot
     <code>calls.length === 0</code> branch, printed the final answer and returned &mdash; firing
     <code>Stop</code> and <code>SessionEnd</code> on the way out (see chapter 11). That branch is the only way
     out other than hitting the limit.</li><li><strong>The banner was printed before the first step.</strong> Model, key fingerprint, which
-    <code>.env</code> won, the policy, the timeout, the tool list and how many lifecycle hooks are available
-    &mdash; the whole configuration as one reproducible header, which is what you want when a demo goes wrong on
-    stage.</li></ul>
+    <code>.env</code> won, the policy, the timeout, the tool list and the hook trace &mdash; the whole
+    configuration as one reproducible header, which is what you want when a demo goes wrong on
+    stage.</li><li><strong>Run it a second time and step 2 fails, and the run carries on.</strong> Now
+    <code>demo/hello.js</code> exists, so <code>create_file</code> refuses to clobber it and
+    <code>edit_file</code> refuses to match an already-edited line. Both arrive as strings, the loop absorbs
+    them, and the run still ends with an answer and a clean scorecard &mdash; principle 4 in action, and exactly
+    what a careful human would do.</li></ul>
 </section>
 
 <section id="run">
@@ -1137,20 +1197,21 @@ npm install                       # one dependency: chalk
 npm start                         # live model, task typed at the &quot;task ›&quot; prompt
 npm start -- &quot;create hello.js that prints today&#x27;s date and time, run it, and save its output to hello-output.txt&quot;
 npm run demo                      # scripted run: no network, no key, no excuses
-npm test                          # 63 offline tests, no key, no network
+npm test                          # 64 offline tests, no key, no network
 
-node src/agent.js &quot;task&quot; --yes                # auto-approve commands
-node src/agent.js &quot;task&quot; --max-steps 6        # tighter loop
-node src/agent.js &quot;task&quot; --model anthropic/claude-sonnet-4.5
-node src/agent.js --hooks                     # the nine lifecycle hooks, in colour
-node src/agent.js --demo --trace-hooks        # the same lifecycle, printed as it fires
+node src/agent.js "task" --yes                # auto-approve commands
+node src/agent.js "task" --max-steps 6        # tighter loop
+node src/agent.js "task" --model anthropic/claude-sonnet-4.5
+node src/agent.js --hooks                     # the nine lifecycle hooks, in colour, then exit
+node src/agent.js "task" --no-hooks           # silence the [HOOK:...] trace lines
 node src/agent.js --help                      # usage summary</pre></figure>
 <p>The five-minute talk script is in the README: run <code>--demo</code> and narrate
 <em>think → tool → result → think</em>; delete <code>workspace/demo/hello.js</code> and run it live with
 <code>--yes</code>; then ask for an edit that cannot match, so the audience sees the error come back as a tool
 result and the model repair it on the next iteration. With two minutes left, <code>--hooks</code> puts the
-lifecycle on screen and <code>--demo --trace-hooks</code> shows those same nine moments firing live &mdash; the
-"how would you extend this?" question, answered in the console.</p>
+lifecycle on screen &mdash; and every run you have just watched printed those same nine moments as
+<code>[HOOK:Name]</code> lines, so the slide and the console already agree. That is the "how would you extend
+this?" question, answered.</p>
 <div class="callout "><strong>A demo that fails on purpose is worth two that succeed.</strong> The happy path shows what an
 agent does. The failure shows <em>why the loop matters</em>: it is the only structure that lets a model recover
 from being wrong, which is the thing no single completion can do.</div>
@@ -1180,7 +1241,7 @@ seen a coding agent do is built from these pieces &mdash; and now you know what 
         Built from the source in <code>mini-coding-js/</code> &mdash; every excerpt is real code with only the
         logging lines trimmed and long lines rewrapped to fit, and the run in chapter 14 is a captured terminal
         session.
-        Tests: <code>npm test</code> (63 offline, no key, no network). Demo: <code>npm run demo</code>.
+        Tests: <code>npm test</code> (64 offline, no key, no network). Demo: <code>npm run demo</code>.
         Hooks: <code>npm run hooks</code>.
       </p>
     </div>
