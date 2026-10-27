@@ -98,6 +98,45 @@ export const ui = {
   fail: (text) => `${chalk.red('✗')} ${text}`,
   /** a titled divider, e.g. "── sandbox checks ──────" */
   rule: (label, width = 44) => chalk.bold.magenta(`── ${label} ${'─'.repeat(width)}`),
+
+  /* ---- lifecycle hooks (see hooks.js) ------------------------------------ *
+   * hooks.js owns the catalogue - names, icons, colours, descriptions - and
+   * every colour still comes from here. `colour` is a chalk mode NAME, so the
+   * event table stays plain data. An unknown name falls back rather than
+   * throwing: this file is also what the palette test calls with junk.        */
+
+  /** a section heading in the hook catalogue */
+  hookTitle: (label) => chalk.bold.cyan(`── ${label} ${'─'.repeat(Math.max(4, 60 - label.length))}`),
+  /** one hook: icon, name in its own colour, and when it fires */
+  hookLine: (icon, name, colour = 'cyan', when = '', live = '') => {
+    const paint = chalk[colour] ?? chalk.cyan;
+    return `  ${icon}  ${paint.bold(String(name).padEnd(16))} ${chalk.white(when)}${live}`;
+  },
+  /** a labelled field under a hook, e.g. "receives  name, args, step" */
+  hookField: (label, value, colour = 'cyan') => {
+    const paint = chalk[colour] ?? chalk.cyan;
+    return `      ${chalk.dim(String(label).padEnd(9))} ${paint(value)}`;
+  },
+  /** marks a hook that currently has a handler attached */
+  hookLive: () => chalk.green(' ← attached'),
+  /** a hook saying something without changing the run: "📝 PreToolUse: ..." */
+  hookNote: (name, text) => `  📝 ${chalk.dim(`${name}: ${text}`)}`,
+  /**
+   * One lifecycle event firing, in the form a student can grep for:
+   *   "🛠️  [HOOK:PreToolUse] before every tool call - run_command {"command":"ls"}"
+   * The tag is the hook's own colour, the explanation is the moment's one-liner
+   * from HOOK_EVENTS, and the detail is what this particular firing carried.
+   */
+  hookTrace: (icon, name, colour = 'cyan', explanation = '', detail = '') => {
+    const paint = chalk[colour] ?? chalk.cyan;
+    const why = explanation ? ` ${chalk.white(explanation)}` : '';
+    const what = detail ? ` ${chalk.dim(`- ${detail}`)}` : '';
+    return `  ${icon}  ${paint.bold(`[HOOK:${name}]`)}${why}${what}`;
+  },
+  /** the ordered lifecycle, one step per line */
+  hookFlow: (steps = []) => (Array.isArray(steps) ? steps : [steps])
+    .map((s, i) => `  ${chalk.dim(`${i + 1}.`)} ${chalk.white(s)}`)
+    .join('\n'),
   /** the last line of a failed run: the process exit code and what it means */
   exitNote: (code, meaning) => `${chalk.red(`exit code ${code}`)}${meaning ? ` ${chalk.dim(`- ${meaning}`)}` : ''}`,
   answerRule: () => chalk.bold.green(`── final answer ${'─'.repeat(38)}`),

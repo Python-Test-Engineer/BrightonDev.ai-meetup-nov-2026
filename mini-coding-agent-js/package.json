@@ -7,6 +7,8 @@
   "scripts": {
     "start": "node src/agent.js",
     "demo": "node src/agent.js --demo",
+    "hooks": "node src/agent.js --hooks",
+    "trace": "node src/agent.js --demo --trace-hooks",
     "test": "node --test"
   },
   "engines": {

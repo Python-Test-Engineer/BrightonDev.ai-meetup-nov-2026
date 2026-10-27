@@ -278,34 +278,36 @@ tbody td:first-child{white-space:nowrap}
 <a href="#sandbox"><span class="n">08</span><span>The sandbox</span></a>
 <a href="#policy"><span class="n">09</span><span>Human in the loop</span></a>
 <a href="#ui"><span class="n">10</span><span>The console palette</span></a>
-<a href="#config"><span class="n">11</span><span>Configuration and precedence</span></a>
-<a href="#bounds"><span class="n">12</span><span>Bounded autonomy</span></a>
-<a href="#trace"><span class="n">13</span><span>A real run, annotated</span></a>
-<a href="#run"><span class="n">14</span><span>Run it yourself</span></a>
-<a href="#limits"><span class="n">15</span><span>What it deliberately does not do</span></a>
+<a href="#hooks"><span class="n">11</span><span>Lifecycle hooks</span></a>
+<a href="#config"><span class="n">12</span><span>Configuration and precedence</span></a>
+<a href="#bounds"><span class="n">13</span><span>Bounded autonomy</span></a>
+<a href="#trace"><span class="n">14</span><span>A real run, annotated</span></a>
+<a href="#run"><span class="n">15</span><span>Run it yourself</span></a>
+<a href="#limits"><span class="n">16</span><span>What it deliberately does not do</span></a>
     </nav>
     <div class="side-foot">
       Source: <code>mini-coding-js/</code><br>
-      948 lines &middot; Node 20+ &middot; one dependency<br>
-      Chapters 01&ndash;15 follow the files.
+      1704 lines in <code>src/</code> &middot; Node 20+ &middot; one dependency<br>
+      Chapters 01&ndash;16 follow the files.
     </div>
   </aside>
 
   <main class="pane" id="top">
     <div class="inner">
       <header class="page-heading">
-        <p class="eyebrow">Explainer &middot; the loop, the tools, the sandbox</p>
+        <p class="eyebrow">Explainer &middot; the loop, the tools, the sandbox, the hooks</p>
         <h1>How a coding agent actually works</h1>
-        <p class="lede">A complete coding agent in 948 lines of plain Node: one HTTP request, six tools, a loop
-        with four bounds, and a folder it cannot escape. Read it top to bottom, or jump to the part you
-        doubt.</p>
+        <p class="lede">A complete coding agent in 1704 lines of plain Node: one HTTP request, six tools, a loop
+        with four bounds, nine lifecycle hooks, and a folder it cannot escape. Read it top to bottom, or jump to
+        the part you doubt.</p>
         <p class="meta">
-          <span>src/agent.js 300</span>
-          <span>src/tools.js 318</span>
-          <span>src/config.js 128</span>
+          <span>src/agent.js 500</span>
+          <span>src/hooks.js 388</span>
+          <span>src/tools.js 351</span>
+          <span>src/config.js 170</span>
           <span>src/workspace.js 85</span>
           <span>src/llm.js 66</span>
-          <span>src/ui.js 51</span>
+          <span>src/ui.js 144</span>
         </p>
       </header>
 
@@ -317,16 +319,17 @@ produce text, a set of <strong>tools</strong> that can actually do something, an
 hands the model's own text back to it as an observation. Everything else &mdash; retries, memory, sub-agents,
 skills, permissions, project rules &mdash; is a layer laid on top of those three.</p>
 
-<p><em>mini-coding-js</em> is those three things and nothing else: 948 lines in <code>src/</code>, one
+<p><em>mini-coding-js</em> is those three things and nothing else: 1704 lines in <code>src/</code>, one
 dependency (<code>chalk</code>, for colour), no SDK, no framework. The model is reached with a single
 <code>fetch</code>. This page walks the whole program, in the order you would read it.</p>
 
 <div class="stats">
-  <div><b>948</b><span>lines in src/</span></div>
-  <div><b>300</b><span>of them the loop</span></div>
+  <div><b>1704</b><span>lines in src/</span></div>
+  <div><b>500</b><span>of them the loop</span></div>
   <div><b>6</b><span>tools</span></div>
+  <div><b>9</b><span>lifecycle hooks</span></div>
   <div><b>1</b><span>dependency</span></div>
-  <div><b>40</b><span>offline tests</span></div>
+  <div><b>63</b><span>offline tests</span></div>
 </div>
 
 <h3>The whole idea, in six lines</h3>
@@ -355,12 +358,14 @@ prints a variation of this. Nothing in the middle is hidden.</p>
 <section id="shape">
 <h2><span class="num">02</span><span>The shape of the program</span></h2>
 
-<p>Six files, each answering one question an audience usually asks. They import in one direction only, so
+<p>Seven files, each answering one question an audience usually asks. They import in one direction only, so
 there is no cycle to hold in your head.</p>
-<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>300</td><td>Where is the loop? Also the CLI, the input field and the scripted demo.</td></tr><tr><td><code>src/tools.js</code></td><td>318</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/config.js</code></td><td>128</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>51</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── the loop ───────────────┐
+<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>500</td><td>Where is the loop? Also the nine hook call sites, the CLI, the input field and the scripted demo.</td></tr><tr><td><code>src/hooks.js</code></td><td>388</td><td>Where can outside code get a turn, and what may it change?</td></tr><tr><td><code>src/tools.js</code></td><td>351</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/config.js</code></td><td>170</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>144</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── the loop ───────────────┐
    ├── llm.js         one POST      │  the agent&#x27;s only
    ├── tools.js       schemas + run │  reach into the world
    │     └── workspace.js   containment
+   ├── hooks.js       named moments │  the one place your
+   │     └── ui.js    every chalk call   code gets a turn
    ├── config.js      .env + defaults
    └── ui.js          every chalk call</pre></figure>
 <p>There is no plugin registry, no abstract base class, no event bus. <code>TOOL_SCHEMAS</code> is an array
@@ -368,7 +373,8 @@ literal and <code>HANDLERS</code> is an object literal whose keys happen to be t
 is thirty lines. To add a seventh tool you would edit two places and be done.</p>
 <div class="callout "><strong>Read it in this order.</strong> <code>agent.js</code> first, out loud, skipping the banner code at
 the bottom. Then <code>tools.js</code> top to bottom, because the schema descriptions are the only prompt
-engineering in the project. Everything else is plumbing you can skim on the projector.</div>
+engineering in the project. <code>hooks.js</code> is the chapter you can read last, and the one an audience
+always asks about. Everything else is plumbing you can skim on the projector.</div>
 </section>
 
 <section id="loop">
@@ -376,10 +382,10 @@ engineering in the project. Everything else is plumbing you can skim on the proj
 
 <p><code>runTask</code> is the whole agent. It takes a task, builds the first two messages, and then runs the
 same seven beats until the model stops asking for tools or the step budget runs out. Here it is with the logging
-lines removed (<code>agent.js:41&ndash;105</code>):</p>
+lines trimmed (<code>agent.js:46&ndash;169</code>):</p>
 <figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>export async function runTask({
   task, workspace, commandPolicy, maxSteps, chatFn, confirm,
-  log = console.log, heartbeatMs = 5000,
+  hooks = null, log = console.log, heartbeatMs = 5000,
 }) {
   const messages = [
     { role: &#x27;system&#x27;, content: SYSTEM_PROMPT },
@@ -387,8 +393,12 @@ lines removed (<code>agent.js:41&ndash;105</code>):</p>
   ];
   const ctx = { workspace, commandPolicy, confirm };
 
+  await hook.run(&#x27;SessionStart&#x27;, { task, workspace: workspace.root });        // 1
+  const submitted = await hook.run(&#x27;UserPromptSubmit&#x27;, { task });            // 2
+
   for (let step = 1; step &lt;= maxSteps; step += 1) {
     log(ui.step(step, maxSteps));
+    await hook.run(&#x27;PreModel&#x27;, { step, maxSteps, messages });                  // 3
 
     let reply;
     const beat = heartbeat(log, heartbeatMs);
@@ -396,18 +406,19 @@ lines removed (<code>agent.js:41&ndash;105</code>):</p>
       reply = await chatFn({ messages, tools: TOOL_SCHEMAS });
     } catch (err) {
       beat.stop();
-      log(ui.error(`request failed: ${err.message}`));
+      await hook.run(&#x27;SessionEnd&#x27;, { ok: false, reason: &#x27;request_failed&#x27; });   // 9
       return { ok: false, reason: &#x27;request_failed&#x27;, messages };
     }
     beat.stop();
 
     const choice  = reply?.choices?.[0] ?? {};
     const message = choice.message ?? {};
+    await hook.run(&#x27;PostModel&#x27;, { step, message, finishReason: choice.finish_reason }); // 4
 
     // A truncated reply means half a tool call. Do not dispatch it.
     if (choice.finish_reason === &#x27;length&#x27; &amp;&amp; !message.tool_calls?.length) {
       messages.push({ role: &#x27;assistant&#x27;, content: message.content ?? &#x27;&#x27; });
-      messages.push({ role: &#x27;user&#x27;, content: &#x27;You were cut off by the length limit. Continue with smaller tool calls.&#x27; });
+      messages.push({ role: &#x27;user&#x27;, content: &#x27;You were cut off by the length limit. Continue smaller.&#x27; });
       continue;
     }
 
@@ -415,7 +426,8 @@ lines removed (<code>agent.js:41&ndash;105</code>):</p>
     const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
 
     if (calls.length === 0) {
-      log(ui.answer((message.content ?? &#x27;(no answer)&#x27;).trim()));
+      await hook.run(&#x27;Stop&#x27;, { answer: message.content ?? &#x27;&#x27;, steps: step });  // 7
+      await hook.run(&#x27;SessionEnd&#x27;, { ok: true, reason: &#x27;answer&#x27; });             // 9
       return { ok: true, answer: message.content ?? &#x27;&#x27;, messages, steps: step };
     }
 
@@ -424,17 +436,26 @@ lines removed (<code>agent.js:41&ndash;105</code>):</p>
       const rawArgs = call.function?.arguments ?? &#x27;{}&#x27;;
       log(ui.tool(name, rawArgs));
 
-      const result = await runTool(name, rawArgs, ctx);
+      const pre = await hook.run(&#x27;PreToolUse&#x27;, { name, args: rawArgs, step });   // 5
+      const result = pre.blocked
+        ? `DENIED: a PreToolUse hook blocked this call (${pre.reason}).`
+        : await runTool(name, rawArgs, ctx);
       log(ui.result(result));
 
-      messages.push({ role: &#x27;tool&#x27;, tool_call_id: call.id, content: String(result) });
+      const post = await hook.run(&#x27;PostToolUse&#x27;, { name, result });             // 6
+      messages.push({ role: &#x27;tool&#x27;, tool_call_id: call.id, content: String(post.replace ?? result) });
     }
   }
 
+  await hook.run(&#x27;StepLimit&#x27;, { steps: maxSteps, messages });                // 8
+  await hook.run(&#x27;SessionEnd&#x27;, { ok: false, reason: &#x27;max_steps&#x27; });           // 9
   return { ok: false, reason: &#x27;max_steps&#x27;, messages };
 }</pre></figure>
+<p>Every numbered comment marks a <code>hook.run(...)</code> call. Nine names, in the order one run reaches
+them: the loop is the same seven beats, and each beat now announces itself. Chapter 11 is what those nine
+lines mean.</p>
 <h3>The seven beats</h3>
-<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>What happens</th><th>Where</th></tr></thead><tbody><tr><td>1</td><td>A step heading is printed and a 5-second heartbeat is armed, so a slow provider never looks like a frozen program.</td><td><code>agent.js:52&ndash;57</code></td></tr><tr><td>2</td><td>One model call: the <em>entire</em> message array plus the six tool schemas. Nothing else is sent.</td><td><code>agent.js:59</code></td></tr><tr><td>3</td><td>A truncated reply (<code>finish_reason: "length"</code> with no tool calls) is never dispatched as half a call; the model is told to continue smaller.</td><td><code>agent.js:71</code></td></tr><tr><td>4</td><td>The assistant message is pushed back into history, stripped to the fields an agent needs.</td><td><code>agent.js:78</code></td></tr><tr><td>5</td><td>No tool calls means the model is finished: print the answer, return <code>ok: true</code>.</td><td><code>agent.js:83</code></td></tr><tr><td>6</td><td>Each tool call is dispatched, its result logged, and the string appended as a <code>role: "tool"</code> message.</td><td><code>agent.js:90&ndash;100</code></td></tr><tr><td>7</td><td>Loop. The next request now holds the model's own intention <em>and</em> the world's answer to it.</td><td><code>agent.js:52</code></td></tr></tbody></table></div><div class="callout "><strong>The loop is the agent.</strong> Delete the <code>for</code> and you have a chatbot with tools it
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>What happens</th><th>Where</th><th>Hook</th></tr></thead><tbody><tr><td>1</td><td>A step heading is printed and a 5-second heartbeat is armed, so a slow provider never looks like a frozen program.</td><td><code>agent.js:88&ndash;96</code></td><td><code>PreModel</code></td></tr><tr><td>2</td><td>One model call: the <em>entire</em> message array plus the six tool schemas. Nothing else is sent.</td><td><code>agent.js:98</code></td><td>&mdash;</td></tr><tr><td>3</td><td>A truncated reply (<code>finish_reason: "length"</code> with no tool calls) is never dispatched as half a call; the model is told to continue smaller.</td><td><code>agent.js:114</code></td><td><code>PostModel</code></td></tr><tr><td>4</td><td>The assistant message is pushed back into history, stripped to the fields an agent needs.</td><td><code>agent.js:121</code></td><td>&mdash;</td></tr><tr><td>5</td><td>No tool calls means the model is finished: print the answer, return <code>ok: true</code>.</td><td><code>agent.js:126&ndash;134</code></td><td><code>Stop</code>, <code>SessionEnd</code></td></tr><tr><td>6</td><td>Each tool call is dispatched, its result logged, and the string appended as a <code>role: "tool"</code> message.</td><td><code>agent.js:136&ndash;161</code></td><td><code>PreToolUse</code>, <code>PostToolUse</code></td></tr><tr><td>7</td><td>Loop. The next request now holds the model's own intention <em>and</em> the world's answer to it.</td><td><code>agent.js:88</code></td><td>&mdash;</td></tr></tbody></table></div><div class="callout "><strong>The loop is the agent.</strong> Delete the <code>for</code> and you have a chatbot with tools it
 will never call. Keep it, and the model can look, act, observe and try again &mdash; which is the entire
 difference between "answers questions about your code" and "changes your code".</div>
 </section>
@@ -714,6 +735,9 @@ loop itself contains no escape codes and the whole palette can be swapped in one
              : `${chalk.green(&#x27;result ←&#x27;)} ${chalk.white(firstLine(text))}`,
   answerRule: () =&gt; chalk.bold.green(`── final answer ${&#x27;─&#x27;.repeat(38)}`),
   answer:  (text) =&gt; chalk.white(text),
+  hookLine:(icon, name, colour, when) =&gt; `  ${icon}  ${chalk[colour].bold(name.padEnd(16))} ${when}`,
+  hookField:(label, value) =&gt; `      ${chalk.dim(label.padEnd(9))} ${value}`,
+  hookTrace:(icon, name, colour, detail) =&gt; `  ${icon}  ${chalk[colour](name.padEnd(16))} ${chalk.dim(detail)}`,
   warn:    (text) =&gt; chalk.yellowBright(text),
   waiting: (text) =&gt; chalk.yellowBright(text),
   error:   (text) =&gt; chalk.red(text),
@@ -728,6 +752,10 @@ loop itself contains no escape codes and the whole palette can be swapped in one
     inline tags would quietly corrupt the very output the audience is reading.</li><li><strong>Every helper returns a string and nothing writes to stdout.</strong> That is why
     <code>runTask</code> can take an injected <code>log</code>, and why the loop can be tested without capturing a
     terminal.</li></ul>
+<p>The lifecycle hooks get their own group of helpers here too &mdash; <code>hookLine</code>,
+<code>hookField</code>, <code>hookTrace</code>, <code>hookFlow</code>. The hook names, icons and colour
+<em>names</em> live in <code>hooks.js</code> as plain data; the colour itself is still painted in this file,
+which is why chapter 11 can describe nine hooks without ever mentioning an escape code.</p>
 <p>The colour of a result is derived, not reported by the tool: <code>isFailure</code> looks for
 <code>ERROR</code>, <code>DENIED</code> or an exit code other than 0 in the first line.</p>
 <figure class="code"><figcaption><span>src/ui.js</span><span class="lang">javascript</span></figcaption><pre>const isFailure = (text) =&gt; /^(ERROR|DENIED)\b/.test(text) || /\bexit code (?!0\b)\d+/.test(text);</pre></figure>
@@ -738,8 +766,188 @@ clean text.</p>
 
 </section>
 
+<section id="hooks">
+<h2><span class="num">11</span><span>Lifecycle hooks</span></h2>
+
+<p>The loop is fixed on purpose &mdash; that is what makes it readable &mdash; but a fixed loop is not
+<em>extensible</em>. "Log every command", "never let it touch <code>.env</code>", "tell me when it gives up":
+every one of those used to mean editing <code>agent.js</code>, and every one of those edits is a chance to break
+the loop for everybody. <code>src/hooks.js</code> is the smallest thing that fixes that. A <strong>hook</strong>
+is a function attached to a named moment in the loop; the loop calls all nine moments, and your code never
+edits the loop at all.</p>
+
+<p>Two things make this a chapter rather than a footnote. First, the nine moments are the shape of every
+production harness you will meet &mdash; permissions, audit logs, redaction and compaction are all the same
+mechanism. Second, it is the honest answer to the question an audience always asks at the end: <em>"so how would
+you make this real?"</em></p>
+
+<h3>The nine moments</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Hook</th><th>Icon</th><th>Colour</th><th>Fires</th><th>What a hook may do</th></tr></thead><tbody><tr><td>1</td><td><code>SessionStart</code></td><td>🚀</td><td>cyan</td><td>once, before the first model call</td><td><strong>refuse to start</strong> - or post a note</td></tr><tr><td>2</td><td><code>UserPromptSubmit</code></td><td>✍️</td><td>blue</td><td>once, as the task enters the loop</td><td><strong>rewrite the task</strong>, or block the run</td></tr><tr><td>3</td><td><code>PreModel</code></td><td>🧠</td><td>magenta</td><td>before every model call</td><td>observe: the request is assembled, not sent</td></tr><tr><td>4</td><td><code>PostModel</code></td><td>💬</td><td>cyan</td><td>after every reply, before dispatch</td><td>observe: answer or tool call, visible first</td></tr><tr><td>5</td><td><code>PreToolUse</code></td><td>🛠️</td><td>bright yellow</td><td>before every tool call</td><td><strong>block</strong> - the tool never runs</td></tr><tr><td>6</td><td><code>PostToolUse</code></td><td>📦</td><td>green</td><td>after every tool call</td><td><strong>replace</strong> the observation the model reads</td></tr><tr><td>7</td><td><code>Stop</code></td><td>🏁</td><td>bright green</td><td>the model answered and the loop is ending</td><td>observe: summary, cost, notification</td></tr><tr><td>8</td><td><code>StepLimit</code></td><td>⏳</td><td>yellow</td><td>the loop hit <code>maxSteps</code></td><td>observe: escalate, dump the transcript</td></tr><tr><td>9</td><td><code>SessionEnd</code></td><td>🔒</td><td>red</td><td>always - finished or not</td><td>observe: the last code to run in the process</td></tr></tbody></table></div>
+
+<figure class="ascii"><figcaption><span>one run, in order</span></figcaption><pre>SessionStart
+  └─ UserPromptSubmit
+       └─ ┌ PreModel ─▶ model call ─▶ PostModel ─▶ PreToolUse ─▶ tool ─▶ PostToolUse ┐
+          └──────────────────── each step repeats this ─────────────────────────────┘
+                                  │
+                        Stop (an answer)  or  StepLimit (the budget)
+                                  │
+                              SessionEnd  ← always, whichever way it went</pre></figure>
+
+<h3>Seeing it, before reading it</h3>
+<p>Two flags exist purely to make the lifecycle legible on a projector, and neither needs a key or a network:</p>
+<figure class="code"><figcaption><span>terminal</span><span class="lang">bash</span></figcaption><pre>node src/agent.js --hooks                # every hook: icon, colour, what it gets, why it exists
+node src/agent.js --demo --trace-hooks   # the same lifecycle, printed as it fires</pre></figure>
+<p><code>--hooks</code> prints the catalogue. It is generated from <code>HOOK_EVENTS</code>, the same array the
+loop fires, so this page and the console cannot drift apart:</p>
+<figure class="code"><figcaption><span>node src/agent.js --hooks</span><span class="lang">console</span></figcaption><pre>── lifecycle hooks - 9 moments in one run ──────────────────────
+  A hook is a function attached to a named moment in the loop. agent.js calls each
+  moment; a hook may observe, rewrite what the model reads, or block a call outright.
+
+  🛠️  PreToolUse       before every tool call
+      receives  name, args, step
+      may       BLOCK - return { block: true, reason } and the tool never runs
+      The one hook that changes what the agent is allowed to do. A permission layer
+      lives here: inspect the arguments, refuse the call. The refusal comes back as an
+      observation, so the model can choose another way instead of crashing.
+
+── the order one run fires them ────────────────────────────────
+  1. SessionStart
+  2. UserPromptSubmit
+  3. [ PreModel → PostModel → PreToolUse → PostToolUse ]
+  4. Stop | StepLimit
+  5. SessionEnd
+
+  9 hooks, and 4 of them can change the run: SessionStart (refuse to start the run);
+  UserPromptSubmit (rewrite or block the task); PreToolUse (block a tool call);
+  PostToolUse (replace the observation). The rest only watch - which is exactly why a
+  hook is a safe first extension point.</pre></figure>
+<p><code>--trace-hooks</code> attaches one observer to every event and prints it as it fires. This is a real
+capture from <code>node src/agent.js --demo --trace-hooks</code>:</p>
+<figure class="code"><figcaption><span>the lifecycle, live</span><span class="lang">console</span></figcaption><pre>  🚀  SessionStart     Show the loop, then try to break the sandbox: create a script, ...
+  ✍️  UserPromptSubmit Show the loop, then try to break the sandbox: create a script, ...
+
+── step 3/12 ────────────────────────────────────────
+  🧠  PreModel         step 3/12 - 6 messages
+  💬  PostModel        step 3 - tool_calls
+think: Now run it - a real shell, a real exit code.
+tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+  🛠️  PreToolUse       run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+result ← exit code 0
+         ↳ stdout: Hello from a tiny agent, edited by a tool call
+  📦  PostToolUse      run_command - exit code 0
+...
+  🏁  Stop             11 step(s) - Done. Created demo/hello.js, ran it, edited one string, ...
+  🔒  SessionEnd       ok (answer) in 399ms</pre></figure>
+<p>Read the trace next to chapter 03's loop and the picture is complete: the hooks sit exactly where the
+<code>hook.run(...)</code> lines are, in the same order, on the same iteration. Nothing is interleaved by
+magic.</p>
+
+<h3>The contract</h3>
+<p>A hook is called with a payload object and its <em>return value</em> decides what happens. That is the whole
+API, and it is deliberately three verbs wide:</p>
+<figure class="code"><figcaption><span>the whole protocol</span><span class="lang">javascript</span></figcaption><pre>return undefined;                              // observe only - the run is untouched
+return { note: &#x27;checked&#x27; };                    // say something; still untouched
+return { task: &#x27;…and run the tests&#x27; };         // UserPromptSubmit: rewrite the task
+return { replace: &#x27;sk-or-[redacted]&#x27; };        // PostToolUse: change what the model reads
+return { block: true, reason: &#x27;no&#x27; };          // SessionStart/UserPromptSubmit/PreToolUse: refuse</pre></figure>
+<p>Two consequences are worth stating plainly, because they are the difference between a hook system that
+survives contact with a real team and one that does not:</p>
+<ul><li><strong>A hook that throws is reported and ignored.</strong> One broken hook must not take the loop with
+    it: the handler is caught, printed as <code>hook PostToolUse (…&#x27;) threw: … - ignored</code>, and the
+    next handler runs. Above all, every <code>tool_call_id</code> still gets a matching tool message, or the
+    next request would be invalid.</li><li><strong>A refusal is an observation, not an exception.</strong> When
+    <code>PreToolUse</code> blocks a call, the tool is never dispatched <em>and</em> the model is told why:
+    <code>DENIED: a PreToolUse hook blocked this call (no pushes from the sandbox). Try another approach.</code>
+    The loop cannot crash on a "no", and the model gets its next turn to choose differently &mdash; which is
+    principle 4, applied to permissions.</li></ul>
+
+<h3>The code</h3>
+<p>The registry is an ordinary object with a map in it. <code>on</code> attaches a function to an event name (a typo
+throws instead of silently never firing), <code>off</code> detaches it, and <code>run</code> calls the handlers in
+order and collects their decisions into one answer:</p>
+<figure class="code"><figcaption><span>src/hooks.js</span><span class="lang">javascript</span></figcaption><pre>export class Hooks {
+  async run(name, payload = {}) {
+    const out = { event: name, ran: 0, blocked: false, reason: null, task: null, replace: null, notes: [], errors: [] };
+
+    for (const handler of [...this.#handlers.get(name)]) {
+      if (handler.once) this.off(name, handler.id);
+      out.ran += 1;
+
+      let decision;
+      try {
+        decision = await handler.fn(payload, { event: name });
+      } catch (err) {
+        out.errors.push(`${handler.id}: ${err.message}`);
+        this.log?.(ui.warn(`  hook ${name} (${handler.id}) threw: ${err.message} - ignored`));
+        continue;                                    // one bad hook is not the loop&#x27;s problem
+      }
+
+      if (!decision || typeof decision !== &#x27;object&#x27;) continue;   // observe-only
+      if (decision.note)    out.notes.push(String(decision.note));
+      if (typeof decision.task    === &#x27;string&#x27;) out.task = decision.task;
+      if (typeof decision.replace === &#x27;string&#x27;) out.replace = decision.replace;
+
+      if (decision.block) {                          // first refusal wins, rest are skipped
+        out.blocked = true;
+        out.reason = decision.reason ? String(decision.reason) : `${name} blocked this step`;
+        break;
+      }
+    }
+    return out;
+  }
+}</pre></figure>
+<p>The loop side is one line per moment, which is the point &mdash; the extensibility costs nine lines in
+<code>runTask</code> and nothing else in the program:</p>
+<figure class="code"><figcaption><span>agent.js, the permission layer in three lines</span><span class="lang">javascript</span></figcaption><pre>const pre = await hook.run(&#x27;PreToolUse&#x27;, { name, args: rawArgs, step });
+const result = pre.blocked
+  ? `DENIED: a PreToolUse hook blocked this call (${pre.reason}). Try another approach.`
+  : await runTool(name, rawArgs, ctx);</pre></figure>
+
+<h3>A permission layer and a redactor, in twelve lines</h3>
+<p>This is a real, runnable use of the API &mdash; it is what the test suite exercises:</p>
+<figure class="code"><figcaption><span>your code, not mine</span><span class="lang">javascript</span></figcaption><pre>import { runTask } from &#x27;./agent.js&#x27;;
+import { Hooks, printHookCatalogue } from &#x27;./hooks.js&#x27;;
+
+const hooks = new Hooks({ log: console.log });        // where broken-hook warnings go
+
+// 1. A permission layer. The model asks; the hook decides.
+hooks.on(&#x27;PreToolUse&#x27;, ({ name, args }) =&gt; (
+  name === &#x27;run_command&#x27; &amp;&amp; /\bgit push\b/.test(args)
+    ? { block: true, reason: &#x27;no pushes from the sandbox&#x27; }
+    : undefined
+));
+
+// 2. Redaction. Whatever a command printed, a key never reaches the model.
+hooks.on(&#x27;PostToolUse&#x27;, ({ result }) =&gt; ({
+  replace: String(result).replace(/sk-or-\S+/g, &#x27;sk-or-[redacted]&#x27;),
+}));
+
+// 3. Failures get a lifecycle too.
+hooks.on(&#x27;SessionEnd&#x27;, ({ ok, reason, durationMs }) =&gt; ({
+  note: `run ${ok ? &#x27;ok&#x27; : `failed (${reason})`} in ${durationMs}ms`,
+}));
+
+printHookCatalogue({ hooks });                        // marks the ones that are attached
+await runTask({ task, workspace, commandPolicy, maxSteps, chatFn, hooks });</pre></figure>
+<p>With that attached, a <code>git push origin main</code> never runs, and the model is told so as a tool result:</p>
+<figure class="code"><figcaption><span>what the model sees</span><span class="lang">console</span></figcaption><pre>tool → run_command {&quot;command&quot;:&quot;git push origin main&quot;}
+result ← DENIED: a PreToolUse hook blocked this call (no pushes from the sandbox). Try another approach.</pre></figure>
+
+<div class="callout "><strong>A tool is how the model acts on the world; a hook is how you act on the loop.</strong>
+Tools are the model's hands and they are described in the prompt, so the model chooses them.
+Hooks are yours: they are not described to the model, they get no vote from it, and they run whether it likes it
+or not. That asymmetry is the whole safety story of a real harness &mdash; and here it is nine lines, in a file
+you can read on a projector.</div>
+
+<div class="callout "><strong>Why nine, and why these nine?</strong> Because the nine are the places the loop
+<em>already</em> pauses: before it starts, before the first request, before and after each reply, before and
+after each tool call, on success, on exhaustion, and at the end. A hook system with an event for something the
+loop does not do is documentation, not an extension point. If you add a tenth, add it where the code pauses.</div>
+
+</section>
+
 <section id="config">
-<h2><span class="num">11</span><span>Configuration and precedence</span></h2>
+<h2><span class="num">12</span><span>Configuration and precedence</span></h2>
 
 <p>Three sources compete for the key and the model name, and the winner is printed on every start with its
 provenance. The ladder is deliberately <em>not</em> the usual one:</p>
@@ -778,7 +986,7 @@ one level down:</p>
 </section>
 
 <section id="bounds">
-<h2><span class="num">12</span><span>Bounded autonomy</span></h2>
+<h2><span class="num">13</span><span>Bounded autonomy</span></h2>
 
 <p>An agent that can loop is an agent that can loop forever. Four bounds cap it, and each one has a visible
 consequence rather than a silent stall.</p>
@@ -809,62 +1017,117 @@ respects the model and one that argues with it.</div>
 </section>
 
 <section id="trace">
-<h2><span class="num">13</span><span>A real run, annotated</span></h2>
+<h2><span class="num">14</span><span>A real run, annotated</span></h2>
 
 <p>Everything on this page so far is description. This is a real run, captured from
 <code>node src/agent.js --demo</code> with colour disabled, unedited:</p>
 <figure class="code"><figcaption><span>terminal</span><span class="lang">console</span></figcaption><pre>min-coding-js
-workspace : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-js\workspace
+workspace : C:\Users\mrcra\OneDrive\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-agent-js\workspace
 model     : scripted (no network)
 key       : -
-env file  : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\.env
+env file  : C:\Users\mrcra\OneDrive\Desktop\BrightonDev.ai-meetup-nov-2026\.env
 commands  : allow
 timeout   : 90s per model call
 tools     : list_files, read_file, create_file, write_file, edit_file, run_command
+hooks     : 9 available - see --hooks
 
-task      : Show the loop: create a script, run it, edit it, run it again.
+task      : Show the loop, then try to break the sandbox: create a script, run it, edit it, run it again, then attempt a path escape, a home-folder read, a force push and an API-key echo.
 
 
 ── step 1/12 ────────────────────────────────────────
-think: Creating a script, then running it to check it works.
-tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;const name = &#x27;tiny agent&#x27;;\nconsole.log(`Hello from a ${name}`);\n&quot;}
-result ← ERROR: demo/hello.js already exists - use edit_file to change it or write_file to overwrite
+think: Looking first: what is in the workspace, and what does the sandbox allow.
+tool → list_files {&quot;path&quot;:&quot;.&quot;}
+result ← .gitkeep  (72b)
 
 ── step 2/12 ────────────────────────────────────────
-think: Now run it.
-tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
-result ← exit code 0
+think: Creating a script, then running it to check it works.
+tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;const agent = &#x27;tiny agent&#x27;;\nconsole.log(`Hello from a ${agent}`);\n&quot;}
+result ← ERROR: demo/hello.js already exists - use edit_file to change it or write_file to overwrite
 
 ── step 3/12 ────────────────────────────────────────
-think: Fixing the copy in the script.
-tool → edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&quot;:&quot;Hello from a ${name}&quot;,&quot;new_string&quot;:&quot;Hello from a ${name}, edited by a tool call&quot;}
-result ← edited demo/hello.js: 1 replacement(s), first at line 2
+think: Now run it - a real shell, a real exit code.
+tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
+result ← exit code 0
+         ↳ stdout: Hello from a tiny agent, edited by a tool call
 
 ── step 4/12 ────────────────────────────────────────
+think: Fixing the copy in the script.
+tool → edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&quot;:&quot;Hello from a ${agent}&quot;,&quot;new_string&quot;:&quot;Hello from a ${agent}, edited by a tool call&quot;}
+result ← ERROR: old_string not found in demo/hello.js. Read the file and copy the snippet exactly, including whitespace.
+
+── step 5/12 ────────────────────────────────────────
 think: Re-running to verify the edit.
 tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
 result ← exit code 0
+         ↳ stdout: Hello from a tiny agent, edited by a tool call
 
-── step 5/12 ────────────────────────────────────────
-think: Done. Created demo/hello.js, ran it, edited one string, re-ran it. The exit codes came back 0 both times.
+── step 6/12 ────────────────────────────────────────
+think: Now the guards. First a write that tries to climb out of the workspace:
+tool → write_file {&quot;path&quot;:&quot;../escape.txt&quot;,&quot;content&quot;:&quot;this file must never be written&quot;}
+result ← ERROR: path escapes the workspace: ../escape.txt
+
+── step 7/12 ────────────────────────────────────────
+think: Then a read from the home folder, where the private keys live:
+tool → read_file {&quot;path&quot;:&quot;~/.ssh/id_rsa&quot;}
+result ← ERROR: absolute path is outside the workspace: ~/.ssh/id_rsa
+
+── step 8/12 ────────────────────────────────────────
+think: A command the deny-list refuses no matter what CMD_POLICY says:
+tool → run_command {&quot;command&quot;:&quot;git push --force origin main&quot;}
+result ← DENIED: blocked by policy (force push). Command: git push --force origin main
+
+── step 9/12 ────────────────────────────────────────
+think: A command that asks its own child process for the API key:
+tool → run_command {&quot;command&quot;:&quot;node -e \&quot;console.log(&#x27;OPENROUTER_API_KEY=&#x27; + (process.env.OPENROUTER_API_KEY ?? &#x27;absent&#x27;))\&quot;&quot;}
+result ← exit code 0
+         ↳ stdout: OPENROUTER_API_KEY=absent
+
+── step 10/12 ────────────────────────────────────────
+think: And a command that fails, so the exit code has to explain itself:
+tool → run_command {&quot;command&quot;:&quot;node -e \&quot;process.exit(1)\&quot;&quot;}
+result ← exit code 1
+         ↳ exit 1: general failure - the command ran and then reported an error (uncaught exception, failed assertion, bad argument). The cause is in stderr; fix that, do not just re-run.
+
+── step 11/12 ────────────────────────────────────────
+think: Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
 
 ── final answer ──────────────────────────────────────
-Done. Created demo/hello.js, ran it, edited one string, re-ran it. The exit codes came back 0 both times.</pre></figure>
+Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
+
+── sandbox checks ────────────────────────────────────────────
+  ✓ file tools stay inside the workspace - ERROR: path escapes the workspace
+  ✓ home and system paths are refused - ERROR: absolute
+  ✓ dangerous commands are denied, whatever the policy - DENIED: blocked by policy
+  ✓ the child process cannot see the API key - OPENROUTER_API_KEY=absent
+  ✓ run_command reports the real exit code - exit code 1
+
+  also enforced, not demoed above: 6000-char output cap per command, 30s command timeout, 8 hard-deny patterns, a 13-variable env allow-list, and the &#x27;ask&#x27;/&#x27;deny&#x27; command policies.
+
+✓ 5/5 sandbox checks held</pre></figure>
 <h3>What to point at</h3>
 <ul><li><strong>Step 1 failed, and the run carried on.</strong> <code>demo/hello.js</code> was left over from an
-    earlier run, so <code>create_file</code> refused to clobber it. That single red line is principle 4 in
-    action: the error arrives as a string, the loop continues, and the next step runs the file that is already
-    there &mdash; which is exactly what a careful human would do.</li><li><strong>The scripted demo uses the real dispatcher.</strong> <code>--demo</code> replaces only
-    <code>chatFn</code> with a fixed list of replies. <code>runTool</code>, the sandbox, the policy and the
-    palette are the production ones, so a demo with no network still fails in real ways.</li><li><strong>Step 5 has no <code>tool →</code> line.</strong> The model said it was done, the loop took the
-    <code>calls.length === 0</code> branch, printed the final answer and returned. That branch is the only way
+    earlier run, so <code>create_file</code> refused to clobber it (step 2), and <code>edit_file</code> then
+    refused to match <code>Hello from a ${name}</code> (step 4) because the file had already been edited by a
+    previous demo. Both red lines are principle 4 in action: the error arrives as a string, the loop continues,
+    and the run still ends with an answer and a clean scorecard &mdash; which is exactly what a careful human
+    would do.</li><li><strong>The scripted demo uses the real dispatcher.</strong> <code>--demo</code> replaces only
+    <code>chatFn</code> with a fixed list of replies. <code>runTool</code>, the sandbox, the policy, the hooks
+    and the palette are the production ones, so a demo with no network still fails in real ways.</li><li><strong>Steps 6&ndash;10 are the sandbox, tested instead of described.</strong> A write to
+    <code>../escape.txt</code> and a read of <code>~/.ssh/id_rsa</code> are refused <em>before</em> any disk
+    access, <code>git push --force</code> is denied whatever the policy says, the child process cannot see the
+    API key, and a failing command reports <code>exit code 1</code> with its meaning spelled out. The
+    <code>sandbox checks</code> scorecard at the end is built from those same tool results &mdash; the run exits
+    non-zero if any guard regressed, so it is checkable rather than claimed.</li><li><strong>Step 11 has no <code>tool →</code> line.</strong> The model said it was done, the loop took the
+    <code>calls.length === 0</code> branch, printed the final answer and returned &mdash; firing
+    <code>Stop</code> and <code>SessionEnd</code> on the way out (see chapter 11). That branch is the only way
     out other than hitting the limit.</li><li><strong>The banner was printed before the first step.</strong> Model, key fingerprint, which
-    <code>.env</code> won, the policy, the timeout and the tool list &mdash; the whole configuration as one
-    reproducible header, which is what you want when a demo goes wrong on stage.</li></ul>
+    <code>.env</code> won, the policy, the timeout, the tool list and how many lifecycle hooks are available
+    &mdash; the whole configuration as one reproducible header, which is what you want when a demo goes wrong on
+    stage.</li></ul>
 </section>
 
 <section id="run">
-<h2><span class="num">14</span><span>Run it yourself</span></h2>
+<h2><span class="num">15</span><span>Run it yourself</span></h2>
 
 <p>Node 20+ and one <code>npm install</code>. The <code>.env</code> at the repository root is found
 automatically, so nothing has to be copied for a live run.</p>
@@ -874,23 +1137,27 @@ npm install                       # one dependency: chalk
 npm start                         # live model, task typed at the &quot;task ›&quot; prompt
 npm start -- &quot;create hello.js that prints today&#x27;s date and time, run it, and save its output to hello-output.txt&quot;
 npm run demo                      # scripted run: no network, no key, no excuses
-npm test                          # 40 offline tests, no key, no network
+npm test                          # 63 offline tests, no key, no network
 
 node src/agent.js &quot;task&quot; --yes                # auto-approve commands
 node src/agent.js &quot;task&quot; --max-steps 6        # tighter loop
 node src/agent.js &quot;task&quot; --model anthropic/claude-sonnet-4.5
+node src/agent.js --hooks                     # the nine lifecycle hooks, in colour
+node src/agent.js --demo --trace-hooks        # the same lifecycle, printed as it fires
 node src/agent.js --help                      # usage summary</pre></figure>
 <p>The five-minute talk script is in the README: run <code>--demo</code> and narrate
 <em>think → tool → result → think</em>; delete <code>workspace/demo/hello.js</code> and run it live with
 <code>--yes</code>; then ask for an edit that cannot match, so the audience sees the error come back as a tool
-result and the model repair it on the next iteration.</p>
+result and the model repair it on the next iteration. With two minutes left, <code>--hooks</code> puts the
+lifecycle on screen and <code>--demo --trace-hooks</code> shows those same nine moments firing live &mdash; the
+"how would you extend this?" question, answered in the console.</p>
 <div class="callout "><strong>A demo that fails on purpose is worth two that succeed.</strong> The happy path shows what an
 agent does. The failure shows <em>why the loop matters</em>: it is the only structure that lets a model recover
 from being wrong, which is the thing no single completion can do.</div>
 </section>
 
 <section id="limits">
-<h2><span class="num">15</span><span>What it deliberately does not do</span></h2>
+<h2><span class="num">16</span><span>What it deliberately does not do</span></h2>
 
 <p>The limits are worth stating as plainly as the features, because each one is where a production agent grows a
 layer this demo does not have.</p>
@@ -899,20 +1166,22 @@ layer this demo does not have.</p>
     Long runs will eventually exceed the window &mdash; which is where summarising, retrieval and compaction
     start to matter.</li><li><strong>No streaming.</strong> Each step waits for a complete reply, so the heartbeat exists to make the
     wait legible. Streaming would delete that problem and add a parser.</li><li><strong>No sub-agents, no retries, no skills, no memory.</strong> Every one of those is a layer on top of
-    this loop, not a replacement for it, and all of them assume the loop already works.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
+    this loop, not a replacement for it, and all of them assume the loop already works. The one extension point
+    that <em>is</em> here is the hooks in chapter 11 &mdash; nine events, no config file, no plugin loader.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
     the system prompt asks for one per step because interleaved edits are much harder to audit live.</li></ul>
-<h3>The eight principles, in one place</h3>
-<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Principle</th><th>Where to see it</th></tr></thead><tbody><tr><td>1</td><td>Tool calling is the model's only ability to act.</td><td><code>src/tools.js</code> &mdash; the schemas are the prompt</td></tr><tr><td>2</td><td>The loop is the agent.</td><td><code>runTask</code>, <code>agent.js:52</code></td></tr><tr><td>3</td><td>Everything is messages.</td><td>one array, four roles, no other state</td></tr><tr><td>4</td><td>Errors are observations, not crashes.</td><td><code>runTool</code>'s try/catch, <code>edit_file</code>'s errors</td></tr><tr><td>5</td><td>Exit codes close the loop.</td><td><code>exit code 0</code> versus <code>1</code> in the result string</td></tr><tr><td>6</td><td>Human in the loop.</td><td><code>CMD_POLICY=ask</code>, plus the hard-deny list</td></tr><tr><td>7</td><td>Least privilege.</td><td><code>Workspace.resolve()</code></td></tr><tr><td>8</td><td>Bounded autonomy.</td><td><code>maxSteps</code>, the truncation guard, both timeouts</td></tr></tbody></table></div>
-<p>That is the whole of it: a model, six tools, a loop with four bounds, and a sandbox. Everything else you have
+<h3>The nine principles, in one place</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Principle</th><th>Where to see it</th></tr></thead><tbody><tr><td>1</td><td>Tool calling is the model's only ability to act.</td><td><code>src/tools.js</code> &mdash; the schemas are the prompt</td></tr><tr><td>2</td><td>The loop is the agent.</td><td><code>runTask</code>, <code>agent.js:88</code></td></tr><tr><td>3</td><td>Everything is messages.</td><td>one array, four roles, no other state</td></tr><tr><td>4</td><td>Errors are observations, not crashes.</td><td><code>runTool</code>'s try/catch, <code>edit_file</code>'s errors, a blocked <code>PreToolUse</code></td></tr><tr><td>5</td><td>Exit codes close the loop.</td><td><code>exit code 0</code> versus <code>1</code> in the result string</td></tr><tr><td>6</td><td>Human in the loop.</td><td><code>CMD_POLICY=ask</code>, plus the hard-deny list</td></tr><tr><td>7</td><td>Least privilege.</td><td><code>Workspace.resolve()</code>, the child-process env allow-list</td></tr><tr><td>8</td><td>Bounded autonomy.</td><td><code>maxSteps</code>, the truncation guard, both timeouts</td></tr><tr><td>9</td><td>Extension points belong at named moments.</td><td><code>src/hooks.js</code> &mdash; nine events, called by the loop, never edited into it</td></tr></tbody></table></div>
+<p>That is the whole of it: a model, six tools, a loop with four bounds, nine lifecycle hooks, and a sandbox. Everything else you have
 seen a coding agent do is built from these pieces &mdash; and now you know what each piece costs.</p>
 
 </section>
 
       <p class="colophon">
         Built from the source in <code>mini-coding-js/</code> &mdash; every excerpt is real code with only the
-        logging lines trimmed and long lines rewrapped to fit, and the run in chapter 13 is a captured terminal
+        logging lines trimmed and long lines rewrapped to fit, and the run in chapter 14 is a captured terminal
         session.
-        Tests: <code>npm test</code> (40 offline, no key, no network). Demo: <code>npm run demo</code>.
+        Tests: <code>npm test</code> (63 offline, no key, no network). Demo: <code>npm run demo</code>.
+        Hooks: <code>npm run hooks</code>.
       </p>
     </div>
   </main>

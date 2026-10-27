@@ -7,6 +7,7 @@ import { TOOL_SCHEMAS, runTool, TOOL_NAMES, SANDBOX_LIMITS } from './tools.js';
 import { Workspace } from './workspace.js';
 import { loadConfig, fingerprint } from './config.js';
 import { ui } from './ui.js';
+import { Hooks, traceHooks, printHookCatalogue, HOOK_EVENTS } from './hooks.js';
 
 const SYSTEM_PROMPT = `You are a small coding agent working inside a sandboxed folder.
 
@@ -37,8 +38,17 @@ function heartbeat(log, everyMs = 5000) {
 /**
  * The whole agent: think -> tool call -> result -> repeat -> answer.
  * Nothing here is magic, and that is the point of the demo.
+ *
+ * The nine `hook.run(...)` calls below are the lifecycle. Each one is a named
+ * moment where outside code gets a turn; with no hooks attached they cost
+ * nothing, and `--hooks` prints what each moment is for. Read hooks.js next.
  */
-export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn, confirm, log = console.log, heartbeatMs = 5000 }) {
+export async function runTask({
+  task, workspace, commandPolicy, maxSteps, chatFn, confirm,
+  hooks = null, log = console.log, heartbeatMs = 5000,
+}) {
+  const started = Date.now();
+  const hook = hooks ?? new Hooks();
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: task },
@@ -48,10 +58,39 @@ export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn
     commandPolicy,
     confirm: confirm ?? (async () => 'deny'),
   };
+  const durationMs = () => Date.now() - started;
+
+  // 1. SessionStart - the run exists, nothing has been sent. Project rules, a
+  //    transcript file and any budget check belong here; a hook may also refuse
+  //    to start at all, which is the cheapest way to enforce a precondition.
+  const opening = await hook.run('SessionStart', {
+    task, workspace: workspace.root, config: { commandPolicy, maxSteps }, log,
+  });
+  if (opening.blocked) {
+    log(ui.error(`stopped before the first request: ${opening.reason}`));
+    await hook.run('SessionEnd', { ok: false, reason: 'blocked', steps: 0, durationMs: durationMs(), messages });
+    return { ok: false, reason: 'blocked_by_hook', messages };
+  }
+
+  // 2. UserPromptSubmit - the last moment before the model sees the task, and
+  //    the first place a harness gets an opinion: rewrite it, or refuse it.
+  const submitted = await hook.run('UserPromptSubmit', { task });
+  if (submitted.blocked) {
+    log(ui.error(`stopped: ${submitted.reason}`));
+    await hook.run('SessionEnd', { ok: false, reason: 'blocked', steps: 0, durationMs: durationMs(), messages });
+    return { ok: false, reason: 'blocked_by_hook', messages };
+  }
+  if (submitted.task !== null) {
+    log(ui.dim(`  UserPromptSubmit hook rewrote the task: ${submitted.task}`));
+    messages[1] = { role: 'user', content: submitted.task };
+  }
 
   for (let step = 1; step <= maxSteps; step += 1) {
     log('');
     log(ui.step(step, maxSteps));
+
+    // 3. PreModel - the request is assembled and about to go over the wire.
+    await hook.run('PreModel', { step, maxSteps, messages, tools: TOOL_SCHEMAS });
 
     let reply;
     const beat = heartbeat(log, heartbeatMs);
@@ -60,12 +99,16 @@ export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn
     } catch (err) {
       beat.stop();
       log(ui.error(`request failed: ${err.message}`));
+      await hook.run('SessionEnd', { ok: false, reason: 'request_failed', steps: step, durationMs: durationMs(), messages });
       return { ok: false, reason: 'request_failed', messages };
     }
     beat.stop();
 
     const choice = reply?.choices?.[0] ?? {};
     const message = choice.message ?? {};
+
+    // 4. PostModel - text came back; an answer or a tool call, visible here first.
+    await hook.run('PostModel', { step, message, finishReason: choice.finish_reason });
 
     // A truncated reply means half a tool call. Do not dispatch it.
     if (choice.finish_reason === 'length' && !message.tool_calls?.length) {
@@ -84,6 +127,9 @@ export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn
       log('');
       log(ui.answerRule());
       log(ui.answer((message.content ?? '(no answer)').trim()));
+      // 7. Stop - the happy ending, and 9. SessionEnd - always last.
+      await hook.run('Stop', { answer: message.content ?? '', steps: step, messages });
+      await hook.run('SessionEnd', { ok: true, reason: 'answer', steps: step, durationMs: durationMs(), messages });
       return { ok: true, answer: message.content ?? '', messages, steps: step };
     }
 
@@ -92,15 +138,33 @@ export async function runTask({ task, workspace, commandPolicy, maxSteps, chatFn
       const rawArgs = call.function?.arguments ?? '{}';
       log(ui.tool(name, rawArgs));
 
-      const result = await runTool(name, rawArgs, ctx);
+      // 5. PreToolUse - the one hook that changes what the agent may do. A
+      //    refusal is returned to the model as an observation, exactly like any
+      //    other failed tool, so it can pick another route on the next step.
+      const pre = await hook.run('PreToolUse', { name, args: rawArgs, step });
+      const result = pre.blocked
+        ? `DENIED: a PreToolUse hook blocked this call (${pre.reason}). Try another approach.`
+        : await runTool(name, rawArgs, ctx);
       log(ui.result(result));
 
+      // 6. PostToolUse - the model reads back whatever this returns, which is
+      //    how a secret gets redacted or a huge output gets capped.
+      const post = await hook.run('PostToolUse', {
+        name, result, step, ok: !/^(ERROR|DENIED)\b/.test(result),
+      });
+      if (post.replace !== null) {
+        log(ui.dim(`         ↳ PostToolUse hook rewrote the observation (${post.replace.length} chars)`));
+      }
+
       // Every tool_call_id MUST get a matching tool message or the next request is invalid.
-      messages.push({ role: 'tool', tool_call_id: call.id, content: String(result) });
+      messages.push({ role: 'tool', tool_call_id: call.id, content: String(post.replace ?? result) });
     }
   }
 
   log(ui.error(`stopped: hit the ${maxSteps}-step limit`));
+  // 8. StepLimit - failures get a lifecycle too.
+  await hook.run('StepLimit', { steps: maxSteps, messages });
+  await hook.run('SessionEnd', { ok: false, reason: 'max_steps', steps: maxSteps, durationMs: durationMs(), messages });
   return { ok: false, reason: 'max_steps', messages };
 }
 
@@ -125,7 +189,7 @@ export const DEMO_SCRIPT = [
     content: 'Creating a script, then running it to check it works.',
     tool_calls: [call('s2', 'create_file', {
       path: 'demo/hello.js',
-      content: "const name = 'tiny agent';\nconsole.log(`Hello from a ${name}`);\n",
+      content: "const agent = 'tiny agent';\nconsole.log(`Hello from a ${agent}`);\n",
     })],
   },
   { content: 'Now run it - a real shell, a real exit code.', tool_calls: [call('s3', 'run_command', { command: 'node demo/hello.js' })] },
@@ -133,8 +197,8 @@ export const DEMO_SCRIPT = [
     content: 'Fixing the copy in the script.',
     tool_calls: [call('s4', 'edit_file', {
       path: 'demo/hello.js',
-      old_string: 'Hello from a ${name}',
-      new_string: 'Hello from a ${name}, edited by a tool call',
+      old_string: 'Hello from a ${agent}',
+      new_string: 'Hello from a ${agent}, edited by a tool call',
     })],
   },
   { content: 'Re-running to verify the edit.', tool_calls: [call('s5', 'run_command', { command: 'node demo/hello.js' })] },
@@ -244,7 +308,10 @@ export async function askTask({ input = process.stdin, output = process.stdout }
 }
 
 function parseArgs(argv) {
-  const opts = { task: '', demo: false, model: undefined, maxSteps: undefined, policy: undefined, yes: false };
+  const opts = {
+    task: '', demo: false, model: undefined, maxSteps: undefined, policy: undefined,
+    yes: false, showHooks: false, traceHooks: false, noHooks: false,
+  };
   const words = [];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
@@ -253,6 +320,9 @@ function parseArgs(argv) {
     else if (a === '--model') opts.model = argv[++i];
     else if (a === '--max-steps') opts.maxSteps = Number(argv[++i]);
     else if (a === '--allow-commands') opts.policy = 'allow';
+    else if (a === '--hooks') opts.showHooks = true;
+    else if (a === '--trace-hooks') opts.traceHooks = true;
+    else if (a === '--no-hooks') opts.noHooks = true;
     else if (a === '--help' || a === '-h') opts.help = true;
     else words.push(a);
   }
@@ -271,6 +341,8 @@ ${ui.title('min-coding-js')} ${ui.dim('- a small coding agent in Node')}
   node src/agent.js "..." --allow-commands   same, from a flag
   node src/agent.js "..." --max-steps 6      cap the loop
   node src/agent.js "..." --model anthropic/claude-sonnet-4.5
+  node src/agent.js --hooks                  the lifecycle: every hook, icon, colour, why
+  node src/agent.js "..." --no-hooks         hide the [HOOK:...] lines (they are on by default)
 
 ${ui.warn('Env: OPENROUTER_API_KEY, OPENROUTER_MODEL, CMD_POLICY=allow|ask|deny, MAX_STEPS, REQUEST_TIMEOUT_MS')}
 Files are confined to ./workspace. Run "npm test" for the offline test suite.
@@ -289,6 +361,15 @@ async function runCli() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) return usage();
 
+  // The lifecycle needs no config and no key: it is a description of the loop,
+  // and printing it here is the fastest way to answer "what can I hook into?".
+  if (opts.showHooks) {
+    printHookCatalogue({ log: console.log });
+    console.log(ui.dim('  Attach one with hooks.on("PreToolUse", fn) and pass it to runTask({ hooks }).'));
+    console.log(ui.dim('  A normal run prints each moment as it fires: [HOOK:Name] what it is for.\n'));
+    return;
+  }
+
   const config = loadConfig({ model: opts.model });
   const workspace = new Workspace(config.workspaceRoot);
 
@@ -306,6 +387,9 @@ async function runCli() {
   kv('commands', commandPolicy);
   kv('timeout', `${Math.round(config.requestTimeoutMs / 1000)}s per model call`);
   kv('tools', TOOL_NAMES.join(', '));
+  kv('hooks', opts.noHooks
+    ? `${HOOK_EVENTS.length} available, not printed (--no-hooks)`
+    : `on: each of the ${HOOK_EVENTS.length} prints as [HOOK:name] - see --hooks, silence with --no-hooks`);
 
   if (!opts.demo && !config.model.includes('/')) {
     console.log(ui.warn(`warning: model "${config.model}" is not an OpenRouter slug (needs vendor/model). Set OPENROUTER_MODEL in .env.`));
@@ -345,6 +429,18 @@ async function runCli() {
 
   console.log(ui.note(`\ntask      : ${task}\n`));
 
+  // The lifecycle trace is ON by default: every demo and every live run prints
+  // its nine moments as `[HOOK:Name] what this moment is for`, which is the
+  // whole lesson in one grep-able line. --no-hooks silences it; --trace-hooks
+  // says the same thing explicitly (it is the documented spelling for "show me").
+  const tracing = !opts.noHooks;
+  const hooks = tracing ? traceHooks({ log: console.log }) : null;
+  if (hooks) {
+    console.log(ui.dim(`  ${hooks.attached().length} lifecycle hooks attached - each prints as it fires, e.g.`));
+    console.log(ui.hookTrace('🛠️', 'PreToolUse', 'yellowBright', 'before every tool call', 'run_command {"command":"ls"}'));
+    console.log(ui.dim('  (--no-hooks hides these; --hooks explains them)\n'));
+  }
+
   const result = await runTask({
     task,
     workspace,
@@ -352,6 +448,7 @@ async function runCli() {
     maxSteps: opts.maxSteps ?? (opts.demo ? DEMO_SCRIPT.length + 1 : config.maxSteps),
     chatFn,
     confirm: makeConfirm(),
+    hooks,
   });
 
   if (!result.ok && result.reason === 'request_failed') process.exitCode = 1;

@@ -4,9 +4,9 @@ A coding agent in plain Node, built to show what an agent actually is: **an LLM 
 a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
 draws the coloured output.
 
-The loop itself is one ~410-line file (`src/agent.js`); tools, sandbox, config and
-the console theme bring `src/` to ~1200 lines. Small enough to read on a projector
-during a talk.
+The loop itself is one ~500-line file (`src/agent.js`); the tools, the sandbox, the
+config, the console theme and the lifecycle hooks bring `src/` to ~1700 lines. Small
+enough to read on a projector during a talk.
 
 ```
         ┌─────────────┐
@@ -58,6 +58,9 @@ flag beats both.
 | `--max-steps 6` | `MAX_STEPS` |
 | `--yes` / `-y` / `--allow-commands` | `CMD_POLICY=allow` |
 | `--demo` | nothing — scripted run, no network, no key needed |
+| `--hooks` | nothing — prints every lifecycle hook (icon, colour, description) and exits |
+| `--no-hooks` | nothing — silences the `[HOOK:…]` trace lines (they print by default) |
+| `--trace-hooks` | nothing — the explicit spelling of the default; harmless |
 
 `src/config.js` resolves all of this and the startup banner prints what won and
 where it came from; the details, banner example and alias rules are in
@@ -90,8 +93,10 @@ node src/agent.js "task" --yes                # auto-approve commands
 node src/agent.js "task" --allow-commands     # same thing, as a flag
 node src/agent.js "task" --max-steps 6        # tighter loop
 node src/agent.js "task" --model anthropic/claude-sonnet-4.5
+node src/agent.js --hooks                     # the lifecycle: every hook, icon, colour, why
+node src/agent.js "task" --no-hooks           # silence the [HOOK:...] trace lines
 node src/agent.js --help                      # usage summary
-npm test                                      # 45 offline tests
+npm test                                      # 64 offline tests
 ```
 
 `--model` beats `.env`, which beats your shell (next section). A bare model name
@@ -138,13 +143,14 @@ vendor with `OPENROUTER_PROVIDER_PREFIX=...` if the guess is wrong.
 
 | File | Lines | What it shows |
 |---|---|---|
-| `src/agent.js` | ~410 | the ReAct loop, system prompt, CLI, input field, heartbeat, scripted demo + sandbox scorecard |
+| `src/agent.js` | ~500 | the ReAct loop and its nine hook call sites, system prompt, CLI, input field, heartbeat, scripted demo + sandbox scorecard |
 | `src/tools.js` | ~350 | tool schemas the model reads + the dispatcher, the deny-list and the env allow-list |
+| `src/hooks.js` | ~390 | the lifecycle: nine named moments, the registry, the `--hooks` catalogue and the live trace |
 | `src/config.js` | ~170 | `.env` discovery and loading, model + policy config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
-| `src/ui.js` | ~110 | the console palette, plus the plain-English meaning of each exit code |
+| `src/ui.js` | ~145 | the console palette (including every hook colour), plus the plain-English meaning of each exit code |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
-| `test/` | ~610 | offline tests for the loop, the demo's sandbox checks, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
+| `test/` | ~990 | offline tests for the loop, the hooks, the demo's sandbox checks, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
 
 ## Coloured output
@@ -169,6 +175,7 @@ think: (text) => `${chalk.cyan('think:')} ${text}`
 | `↳ stdout: ...` under `exit code 0` | dim - the first line the command printed |
 | `↳ exit N: ...` under a failure | dim - what that exit code means in English |
 | sandbox scorecard (`✓` / `✗`, `── sandbox checks ──`) | green / red checks, magenta heading |
+| lifecycle hook trace (`[HOOK:Name] …`) | each hook's own colour (cyan `SessionStart`, bright yellow `PreToolUse`, green `PostToolUse`, red `SessionEnd`), icons in the margin; on by default |
 | final answer heading | bold green |
 | warnings | bright yellow |
 | failures | red |
@@ -190,6 +197,123 @@ redirecting a run to a file gives clean text.
 | `write_file` | create or overwrite a whole file |
 | `edit_file` | exact-snippet replace; 0 matches = error, >1 = error unless `replace_all` |
 | `run_command` | shell in the workspace root, 30 s timeout, output capped at 6000 chars, `env` allow-listed, returns `exit code N` + streams |
+
+## Lifecycle hooks
+
+The loop is fixed on purpose, but a fixed loop is not extensible: "log every
+command", "never let it touch `.env`" and "tell me when it gives up" all used to
+mean editing `agent.js`. `src/hooks.js` adds the smallest extension point that
+fixes that - **nine named moments where your code gets a turn**, called by the
+loop, able to observe, rewrite or block.
+
+```bash
+npm start                     # every run prints its lifecycle as [HOOK:Name] lines
+npm run trace                 # node src/agent.js --demo (the trace is on by default)
+npm run hooks                 # the whole lifecycle, with icons, colour and description
+node src/agent.js "task" --no-hooks    # silence the trace lines
+```
+
+Every run prints the lifecycle as it happens - one grep-able line per moment, tagged
+`[HOOK:Name]`, followed by what that moment is *for* and what this firing carried:
+
+```
+  🚀  [HOOK:SessionStart] once, before the first model call - Show the loop, then try to break the sandbox: ...
+  ✍️  [HOOK:UserPromptSubmit] once, as the task enters the loop - Show the loop, then try to break the sandbox: ...
+
+── step 1/12 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 1/12 - 2 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 1 - tool_calls
+think: Looking first: what is in the workspace, and what does the sandbox allow.
+tool → list_files {"path":"."}
+  🛠️  [HOOK:PreToolUse] before every tool call - list_files {"path":"."}
+result ← .gitkeep  (72b)
+  📦  [HOOK:PostToolUse] after every tool call - list_files - .gitkeep  (72b)
+...
+  🏁  [HOOK:Stop] the model answered and the loop is ending - 11 step(s) - Done. Created demo/hello.js, ...
+  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 399ms
+```
+
+Each tag is painted in that hook's own colour, so the trace reads like the diagram
+in the explainer. `--no-hooks` turns it off when you want the plain loop back.
+
+| # | Hook | Icon | Fires | Can |
+|---|---|---|---|---|
+| 1 | `SessionStart` | 🚀 | once, before the first model call | refuse to start, or post a note |
+| 2 | `UserPromptSubmit` | ✍️ | once, as the task enters the loop | rewrite the task, or block the run |
+| 3 | `PreModel` | 🧠 | before every model call | observe (the request is assembled) |
+| 4 | `PostModel` | 💬 | after every reply, before dispatch | observe (answer or tool call, visible first) |
+| 5 | `PreToolUse` | 🛠️ | before every tool call | **block** - the tool never runs |
+| 6 | `PostToolUse` | 📦 | after every tool call | **replace** the observation the model reads |
+| 7 | `Stop` | 🏁 | the model answered | observe (summary, cost, notification) |
+| 8 | `StepLimit` | ⏳ | the loop hit `maxSteps` | observe (escalate, dump the transcript) |
+| 9 | `SessionEnd` | 🔒 | always - finished or not | observe (the last code to run) |
+
+`node src/agent.js --hooks` prints exactly this table, generated from the same
+`HOOK_EVENTS` array the loop fires - so the documentation cannot drift from the
+code:
+
+```
+── lifecycle hooks - 9 moments in one run ──────────────────────
+  A hook is a function attached to a named moment in the loop. agent.js calls each
+  moment; a hook may observe, rewrite what the model reads, or block a call outright.
+
+  🛠️  PreToolUse       before every tool call
+      receives  name, args, step
+      may       BLOCK - return { block: true, reason } and the tool never runs
+      The one hook that changes what the agent is allowed to do. A permission layer
+      lives here: inspect the arguments, refuse the call. ...
+
+── the order one run fires them ────────────────────────────────
+  1. SessionStart
+  2. UserPromptSubmit
+  3. [ PreModel → PostModel → PreToolUse → PostToolUse ]
+  4. Stop | StepLimit
+  5. SessionEnd
+```
+
+### Writing one
+
+```js
+import { runTask } from './agent.js';
+import { Hooks, printHookCatalogue } from './hooks.js';
+
+const hooks = new Hooks({ log: console.log });     // log = where broken-hook warnings go
+
+// A permission layer: four tools, one folder, no surprises.
+hooks.on('PreToolUse', ({ name, args }) => {
+  if (name === 'run_command' && /(^|\s)(rm|del|format|shutdown)\b/.test(args)) {
+    return { block: true, reason: 'destructive commands are not allowed here' };
+  }
+  return { note: `${name} was checked` };          // observe-only, and it prints
+});
+
+// Never let a key reach the model, whatever a command printed.
+hooks.on('PostToolUse', ({ result }) => ({
+  replace: String(result).replace(/sk-or-\S+/g, 'sk-or-[redacted]'),
+}));
+
+// Failures get a lifecycle too.
+hooks.on('SessionEnd', ({ ok, reason, durationMs }) => ({ note: `run ${ok ? 'ok' : `failed (${reason})`} in ${durationMs}ms` }));
+
+printHookCatalogue({ hooks });                     // mark what is attached
+await runTask({ task, workspace, commandPolicy, maxSteps, chatFn, hooks });
+```
+
+Three rules hold it together:
+
+1. **Observe, rewrite, or block - return nothing and the run is untouched.**
+   `{ block: true, reason }` and `{ replace }` are the only two things that change
+   the run; everything else is a note.
+2. **A hook that throws is reported and ignored.** One broken hook must not take
+   the loop with it - above all, every `tool_call_id` still gets a tool result, or
+   the next request is invalid.
+3. **A blocked tool call is an observation, not an exception.** The refusal goes
+   back to the model as `DENIED: a PreToolUse hook blocked this call (...)`, so it
+   can pick another route on the next step. The loop never crashes on a "no".
+
+The trace at the top of this section is that mechanism at work: one observer per
+event, registered by `traceHooks()`. The CLI attaches it by default - a `Hooks`
+with nine observers, passed to `runTask` - and `--no-hooks` leaves it off.
 
 ## The AI principles it demonstrates
 
@@ -218,6 +342,10 @@ redirecting a run to a file gives clean text.
 8. **Bounded autonomy.** `maxSteps` caps the loop; a truncated reply
    (`finish_reason: "length"`) is never dispatched as half a tool call - the model
    is told to continue with smaller calls instead.
+9. **Extension points belong at named moments.** `src/hooks.js` gives nine of them
+   (`SessionStart` … `SessionEnd`) and the loop calls all nine. Your code never
+   edits the loop, and a hook that misbehaves is reported rather than fatal: that is
+   the shape every real agent harness grows, at a size you can read in one sitting.
 
 ## Deliberate limits
 
@@ -227,7 +355,9 @@ redirecting a run to a file gives clean text.
 - No context management: long runs will eventually exceed the model's window
   (each request is capped at `max_tokens: 2048`).
 - No streaming, no sub-agents, no retries, no skills, no memory - all of those are
-  layers on top of this loop, not replacements for it.
+  layers on top of this loop, not replacements for it. `src/hooks.js` is the one
+  extension point that IS here, and it is deliberately small: nine events, no
+  configuration file, no plugin loading.
 - With no TTY (piped input, CI) the `ask` policy degrades to deny: an unanswerable
   prompt never becomes an approval.
 
@@ -249,14 +379,21 @@ asking the agent to do something it will fail at first (e.g. "edit hello.js to u
 a variable called `msg`") so the audience sees the error come back as a tool result
 and the model fix it on the next iteration.
 
+With two minutes left, `node src/agent.js --hooks` puts the lifecycle on screen
+(nine moments, icons, colours, one sentence each) &mdash; and the run you have just
+watched printed the same nine as `[HOOK:Name]` lines, so the slide and the console
+already agree. That is the "how would you extend this?" question, answered.
+
 ## Tests
 
 ```bash
 npm test        # node --test: offline, no key, no network
 ```
 
-45 tests cover the loop (including truncation and the max-steps stop), the scripted
-demo's sandbox checks, `.env` discovery and precedence, every tool's failure modes,
-the child-process env allow-list, the path resolver's escape attempts, the palette
-(tag escaping, backslashes, red results, exit-code explanations) and the input field
-(trimming, blank-line re-prompt, closed input).
+64 tests cover the loop (including truncation and the max-steps stop), the lifecycle
+hooks (every event documented, blocking, replacing, a throwing hook, the order a run
+fires them in), the scripted demo's sandbox checks, `.env` discovery and precedence,
+every tool's failure modes, the child-process env allow-list, the path resolver's
+escape attempts, the palette (tag escaping, backslashes, red results, exit-code
+explanations, the hook colours) and the input field (trimming, blank-line re-prompt,
+closed input).
