@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mini-coding-agent &middot; sandboxing: from code to container</title>
+<style>
+html{font-size:24px}
+
+:root{
+  --paper:#f0eee6; --surface:#fbfaf7; --ivory:#fffdfa; --ink:#1f1e1d;
+  --prose:#33302c; --muted:#55524c; --stone:#8c877c;
+  --line:#e0dbcf; --line-soft:#e9e4d8; --tint:#f6ede6;
+  --terra:#d97757; --terra-dark:#c9633f; --amber:#b9862f;
+  --code-bg:#23211e; --code-bar:#2b2823; --code-line:#3a3732;
+  --code-ink:#f2ece1; --code-dim:#a9a294; --code-accent:#f0b49a;
+  --sidebar:19.25rem; --measure:46rem;
+  --sans:-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif;
+  --serif:'Iowan Old Style',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif;
+  --mono:'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--paper); color:var(--prose);
+  font:1.03125rem/1.66 var(--sans);
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:#f0d3c6; color:#2a2622}
+
+/* ---------- shell ---------- */
+.shell{display:grid; grid-template-columns:var(--sidebar) minmax(0,1fr); align-items:start}
+.sidebar{
+  position:sticky; top:0; height:100vh; overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; scrollbar-color:#cec6b5 transparent;
+  padding:1.625rem 1.125rem 2.125rem 1.375rem;
+  border-right:0.0625rem solid var(--line);
+  background:linear-gradient(180deg,#f4f1e9,#efece3 60%,#ece8de);
+}
+.side-kicker{
+  display:block; margin:0 0 0.625rem; color:var(--terra-dark);
+  font:600 0.65625rem/1.3 var(--sans); letter-spacing:.14em; text-transform:uppercase; text-decoration:none;
+}
+.side-title{
+  margin:0; color:var(--ink); font:500 1.3125rem/1.2 var(--serif); letter-spacing:-.01em;
+}
+.side-sub{margin:0.375rem 0 0; color:var(--stone); font-size:0.7875rem; line-height:1.45}
+.side-rule{height:0.0625rem; margin:1.125rem 0 0.875rem; background:var(--line)}
+.side-label{
+  margin:0 0 0.375rem; color:var(--stone);
+  font:600 0.65625rem/1.3 var(--sans); letter-spacing:.13em; text-transform:uppercase;
+}
+.toc{display:flex; flex-direction:column; gap:0.0625rem}
+.toc a{
+  display:flex; gap:0.5625rem; align-items:baseline;
+  padding:0.375rem 0.5625rem 0.375rem 0.625rem; border-left:0.125rem solid transparent; border-radius:0 0.4375rem 0.4375rem 0;
+  color:var(--muted); font-size:0.8375rem; line-height:1.4; text-decoration:none;
+  transition:background .14s,color .14s,border-color .14s;
+}
+.toc a .n{color:#a9a294; font:0.6875rem/1 var(--mono); flex:0 0 1.125rem}
+.toc a:hover{background:#e8e3d6; color:var(--ink)}
+.toc a.active{background:var(--tint); border-left-color:var(--terra); color:var(--ink); font-weight:600}
+.toc a.active .n{color:var(--terra-dark)}
+.side-foot{
+  margin-top:1.25rem; padding-top:0.875rem; border-top:0.0625rem solid var(--line);
+  color:var(--stone); font-size:0.7375rem; line-height:1.6;
+}
+.side-foot code{font-size:0.6875rem}
+
+.progress{position:fixed; top:0; left:var(--sidebar); right:0; height:0.125rem; z-index:40; background:transparent}
+.progress span{display:block; height:100%; width:0; background:var(--terra); transition:width .1s linear}
+
+.sidebar::-webkit-scrollbar{width:0.4375rem}
+.sidebar::-webkit-scrollbar-thumb{background:#d5ccbb; border-radius:0.5rem}
+.sidebar::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- content pane ---------- */
+.pane{padding:3.25rem 3.5rem 8.75rem; min-width:0}
+.inner{max-width:var(--measure); margin:0 auto}
+
+.page-heading{margin:0 0 2.125rem; padding-bottom:1.75rem; border-bottom:0.0625rem solid var(--line)}
+.page-heading .eyebrow{
+  margin:0 0 0.75rem; color:var(--terra-dark);
+  font:600 0.6875rem/1.3 var(--sans); letter-spacing:.15em; text-transform:uppercase;
+}
+h1{
+  margin:0; color:var(--ink); font:500 clamp(2.125rem,4vw,2.875rem)/1.1 var(--serif); letter-spacing:-.02em;
+}
+.page-heading .lede{margin:0.875rem 0 0; color:var(--muted); font-size:1.09375rem; max-width:38rem}
+.meta{
+  margin:1.25rem 0 0; display:flex; flex-wrap:wrap; gap:0.25rem 0.6875rem;
+  color:var(--stone); font:0.7rem/1.6 var(--mono);
+}
+.meta span::before{content:"\00b7"; margin-right:0.6875rem; color:#c3bcae}
+.meta span:first-child::before{content:none; margin:0}
+
+section{padding-top:0.375rem; margin:0 0 2.75rem}
+section:first-of-type h2{margin-top:0}
+h2{
+  display:flex; gap:0.8125rem; align-items:baseline;
+  margin:2.375rem 0 0.875rem; color:var(--ink);
+  font:500 1.65625rem/1.22 var(--serif); letter-spacing:-.015em;
+  scroll-margin-top:1.625rem;
+}
+h2 .num{
+  flex:0 0 auto; color:var(--terra); padding-top:0.125rem;
+  font:600 0.71875rem/1 var(--mono); letter-spacing:.06em;
+}
+h3{
+  margin:1.875rem 0 0.625rem; color:var(--ink);
+  font:600 0.96875rem/1.4 var(--sans); letter-spacing:.005em;
+}
+p{margin:0 0 0.875rem}
+p + p{margin-top:-0.125rem}
+strong{color:var(--ink); font-weight:600}
+em{font-style:italic; color:var(--ink)}
+a{color:var(--terra-dark); text-decoration-thickness:0.0625rem; text-underline-offset:0.125rem}
+
+ul{margin:0 0 1rem; padding-left:0; list-style:none}
+li{position:relative; margin:0 0 0.625rem; padding-left:1.25rem}
+li::before{
+  content:""; position:absolute; left:0.1875rem; top:.66em;
+  width:0.375rem; height:0.375rem; border-radius:50%; background:#d8b6a6;
+}
+li strong{color:var(--ink)}
+
+code{
+  padding:.12em .38em; border-radius:0.3125rem; background:#e9e4d7; color:#7c3f2b;
+  font:.855em/1.5 var(--mono); word-break:break-word;
+}
+
+/* ---------- callouts ---------- */
+.callout{
+  margin:1.25rem 0 1.375rem; padding:0.8125rem 1.0625rem 0.875rem;
+  border-left:0.1875rem solid var(--terra); border-radius:0 0.5625rem 0.5625rem 0;
+  background:var(--tint); color:#4b4741; font-size:0.925rem; line-height:1.62;
+}
+.callout strong{color:var(--ink)}
+.callout.warn{border-left-color:var(--amber); background:#f7f0da; color:#4e4734}
+
+/* ---------- code ---------- */
+figure.code, figure.ascii{margin:1.125rem 0 1.375rem; border-radius:0.6875rem; overflow:hidden}
+figure.code{margin-left:-1.375rem; margin-right:-1.375rem}
+figure.code{background:var(--code-bg); border:0.0625rem solid #34312b; box-shadow:0 0.125rem 0.625rem rgba(31,30,29,.07)}
+figure.code figcaption{
+  display:flex; justify-content:space-between; gap:0.75rem; align-items:center;
+  padding:0.5rem 0.875rem; background:var(--code-bar); border-bottom:0.0625rem solid var(--code-line);
+  color:var(--code-accent); font:0.7125rem/1.4 var(--mono); letter-spacing:.02em;
+}
+figure.code figcaption .lang{color:#7d776b; font-size:0.6625rem; letter-spacing:.1em; text-transform:uppercase}
+figure.code pre{
+  margin:0; padding:0.9375rem 1.125rem 1.0625rem; overflow-x:auto;
+  color:var(--code-ink); font:0.775rem/1.66 var(--mono); tab-size:2;
+  white-space:pre-wrap; overflow-wrap:break-word;
+}
+figure.ascii{
+  border:0.0625rem dashed #d3ccbb; background:#f7f4ec;
+}
+figure.ascii figcaption{
+  padding:0.4375rem 0.875rem 0; color:var(--stone);
+  font:600 0.65rem/1.4 var(--sans); letter-spacing:.12em; text-transform:uppercase;
+}
+figure.ascii pre{
+  margin:0; padding:0.6875rem 0.875rem 0.9375rem; overflow-x:auto;
+  color:#4c483f; font:0.76875rem/1.55 var(--mono); white-space:pre;
+}
+
+/* ---------- tables ---------- */
+.table-wrap{margin:1rem 0 1.375rem; overflow-x:auto; scrollbar-width:thin; scrollbar-color:#cec6b5 transparent}
+.table-wrap::-webkit-scrollbar{height:0.4375rem}
+.table-wrap::-webkit-scrollbar-thumb{background:#d5ccbb; border-radius:0.5rem}
+table{width:100%; border-collapse:collapse; font-size:0.875rem; line-height:1.5}
+thead th{
+  padding:0 0.75rem 0.5rem 0; border-bottom:0.0625rem solid var(--line); text-align:left;
+  color:var(--stone); font:600 0.6625rem/1.3 var(--sans); letter-spacing:.09em; text-transform:uppercase;
+}
+tbody td{padding:0.625rem 0.75rem 0.625rem 0; border-bottom:0.0625rem solid var(--line-soft); vertical-align:top; color:var(--muted)}
+tbody tr:last-child td{border-bottom:none}
+tbody td:first-child{color:var(--ink)}
+tbody td code{font-size:0.75rem}
+tbody td:first-child{white-space:nowrap}
+.tag{
+  display:inline-block; margin-left:0.375rem; padding:0.0625rem 0.375rem; border-radius:1.25rem;
+  background:#f0dcd2; color:#9a4d31; font:600 0.6rem/1.5 var(--sans); letter-spacing:.08em; text-transform:uppercase;
+}
+
+.table-wrap.dense table{font-size:0.8125rem}
+.table-wrap.dense tbody td, .table-wrap.dense td code{white-space:normal; overflow-wrap:anywhere}
+.table-wrap.dense tbody td{padding-right:0.625rem}
+.table-wrap.dense tbody td:first-child{min-width:8.5rem}
+
+/* ---------- footer ---------- */
+.colophon{
+  margin-top:3.5rem; padding-top:1.125rem; border-top:0.0625rem solid var(--line);
+  color:var(--stone); font-size:0.775rem; line-height:1.7;
+}
+.colophon code{font-size:0.7rem}
+
+/* ---------- dark ---------- */
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#171614; --surface:#1e1d1a; --ivory:#232220; --ink:#f1ece2;
+    --prose:#cdc7ba; --muted:#a8a294; --stone:#8b857a;
+    --line:#332f29; --line-soft:#2a2721; --tint:#2b241f;
+    --terra:#e08a6a; --terra-dark:#eda07e; --amber:#d3a44a;
+    --code-bg:#1b1a17; --code-bar:#232220; --code-line:#332f2a;
+    --code-ink:#efe9de; --code-dim:#9a948a; --code-accent:#f0b49a;
+  }
+  ::selection{background:#4a2f24; color:#f1ece2}
+  .sidebar{background:linear-gradient(180deg,#1c1b18,#191815 60%,#171614)}
+  .toc a .n{color:#6f6a60}
+  .toc a:hover{background:#242320}
+  .toc a.active{background:#2b241f}
+  .side-kicker{color:#e08a6a}
+  code{background:#2a2721; color:#e2a184}
+  .callout{color:#c9c3b6}
+  .callout.warn{color:#cdc4ad}
+  figure.ascii{background:#1d1c19; border-color:#3a362f}
+  figure.ascii pre{color:#c3bcae}
+  .tag{background:#3a2a22; color:#e8a888}
+  .meta span::before{color:#4a463f}
+}
+
+/* ---------- narrow ---------- */
+@media (max-width: 940px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:static; height:auto; border-right:none; border-bottom:0.0625rem solid var(--line); padding:1.375rem 1.25rem 1.125rem}
+  .toc{flex-direction:row; flex-wrap:wrap; gap:0.25rem 0.375rem}
+  .toc a{padding:0.3125rem 0.5625rem; border-left:none; border-radius:0.4375rem; background:#eae5d8; font-size:0.775rem}
+  .toc a .n{flex:0 0 auto}
+  .toc a.active{border-left:none}
+  .side-foot{display:none}
+  .progress{left:0}
+  .pane{padding:1.875rem 1.25rem 5.625rem}
+  h2{font-size:1.4375rem}
+  .table-wrap{margin-left:0; margin-right:0}
+  figure.code{margin-left:0; margin-right:0}
+  thead th{white-space:nowrap}
+  tbody td, tbody td code{white-space:normal; overflow-wrap:anywhere}
+}
+
+/* ---------- print ---------- */
+@media print{
+  .sidebar,.progress{display:none}
+  .shell{display:block}
+  .pane{padding:0}
+  body{background:#fff; font-size:10.5pt}
+  h2{break-after:avoid} figure,table,.callout{break-inside:avoid}
+  figure.code{margin-left:0; margin-right:0}
+  a{color:inherit; text-decoration:none}
+}
+</style>
+</head>
+<body>
+<div class="progress"><span id="bar"></span></div>
+<div class="shell">
+
+  <aside class="sidebar">
+    <a class="side-kicker" href="#top">Brighton Dev AI &middot; Nov 2026</a>
+    <p class="side-title">Sandboxing the agent</p>
+    <p class="side-sub">Seven rungs from a path check to a microVM. Climb only as far as the unattended case needs.</p>
+    <div class="side-rule"></div>
+    <p class="side-label">Contents</p>
+    <nav class="toc" id="toc">
+<a href="#why"><span class="n">01</span><span>What a sandbox is for</span></a>
+<a href="#ladder"><span class="n">02</span><span>The ladder</span></a>
+<a href="#tier0"><span class="n">03</span><span>Tier 0 &mdash; the prompt</span></a>
+<a href="#tier1"><span class="n">04</span><span>Tier 1 &mdash; containment in code</span></a>
+<a href="#tier2"><span class="n">05</span><span>Tier 2 &mdash; process hardening</span></a>
+<a href="#gap"><span class="n">06</span><span>Why hardening is not isolation</span></a>
+<a href="#tier3"><span class="n">07</span><span>Tier 3 &mdash; operating system</span></a>
+<a href="#tier4"><span class="n">08</span><span>Tier 4 &mdash; Docker</span></a>
+<a href="#dockerlimits"><span class="n">09</span><span>What Docker does not give you</span></a>
+<a href="#tier5"><span class="n">10</span><span>Tier 5 &mdash; stronger kernel isolation</span></a>
+<a href="#tier6"><span class="n">11</span><span>Tier 6 &mdash; someone else's machine</span></a>
+<a href="#wire"><span class="n">12</span><span>Wiring it into the agent</span></a>
+<a href="#attack"><span class="n">13</span><span>Red-team it</span></a>
+<a href="#recommend"><span class="n">14</span><span>Which rung, when</span></a>
+    </nav>
+    <div class="side-foot">
+      Companion to <code>explainer.html</code><br>
+      Tier 1&ndash;2 = 2 files in <code>src/</code><br>
+      Tier 4 = one Dockerfile
+    </div>
+  </aside>
+
+  <main class="pane" id="top">
+    <div class="inner">
+      <header class="page-heading">
+        <p class="eyebrow">Sandbox &middot; the ladder</p>
+        <h1>From a path check to a container</h1>
+        <p class="lede">The explainer's chapter 08 admitted the limit: file tools are contained, a shell is not.
+        This is every option for closing that gap, cheapest first &mdash; code, then the operating system,
+        then Docker, then the tiers you only need once someone else's code runs on your machine.</p>
+        <p class="meta">
+          <span>7 tiers</span>
+          <span>tier 1 = 85 lines</span>
+          <span>tier 4 = docker run</span>
+          <span>1 interface</span>
+          <span>9 red-team checks</span>
+        </p>
+      </header>
+
+<section id="why">
+<h2><span class="num">01</span><span>What a sandbox is for</span></h2>
+
+<p>Chapter 08 of the explainer ended on a warning: the file tools are contained, but
+<code>run_command</code> is a real shell and nothing stops it walking out of <code>workspace/</code>.
+That is the honest answer for a laptop demo, and it is also the point where the interesting engineering
+starts.</p>
+
+<p>This page is the build-up in the order you would actually do it: <strong>containment in code first</strong>,
+because it is free and it teaches you what the threat is; then <strong>process hardening</strong>; then the
+operating system; then <strong>Docker</strong>, which is the step most teams take next; then the things that
+exist once a container is not enough. Each tier is described by what it stops, what it costs, and what it
+does <em>not</em> stop.</p>
+
+<p>A container is not a magic word. It is one rung on a ladder, and the rungs below it are cheap.</p>
+<div class="table-wrap"><table><thead><tr><th>Question</th><th>Honest answer</th></tr></thead><tbody><tr><td>What is being sandboxed?</td><td>Two different things: <em>files</em> the agent writes, and <em>commands</em> it runs. The second is the hard one.</td></tr><tr><td>Against whom?</td><td>A model that is wrong, not an attacker with shell access. Those are different threat models and they want different tiers.</td></tr><tr><td>What does &ldquo;enough&rdquo; mean?</td><td>Enough that a mistake costs a file, not your home directory, your API key, or the machine.</td></tr></tbody></table></div><div class="callout"><strong>Threat model first, mechanism second.</strong> A watched live demo has a human in the loop, which is already a control. An unattended loop at 2&nbsp;a.m. has none, and that is the run that justifies a container.</div>
+</section>
+<section id="ladder">
+<h2><span class="num">02</span><span>The ladder</span></h2>
+
+<p>Seven rungs, cheapest first. Each one is a superset of the one above it, and each one buys a specific
+property rather than &ldquo;security&rdquo; in general.</p>
+<figure class="ascii"><figcaption>the ladder</figcaption><pre>  tier 0  prompt + policy    asks nicely
+        |
+  tier 1  path containment   files stay in workspace/
+        |
+  tier 2  hardening          deny-list, timeouts, env
+        |
+  tier 3  OS isolation       uid, namespaces, no net
+        |
+  tier 4  container          own fs + own network
+        |
+  tier 5  kernel isolation   gVisor / Kata / microVM
+        |
+  tier 6  hosted sandbox     never on your machine</pre></figure><div class="table-wrap dense"><table><thead><tr><th>Tier</th><th>Stops</th><th>Does not stop</th><th>Cost to adopt</th></tr></thead><tbody><tr><td>0</td><td>Nothing. It models intent.</td><td>Any mistake at all</td><td>0 lines</td></tr><tr><td>1</td><td><code>../../secrets</code>, absolute paths, junctions</td><td>Any command</td><td>Already done</td></tr><tr><td>2</td><td>The eight catastrophic patterns; runaway output; hangs</td><td>An inventive command</td><td>One afternoon</td></tr><tr><td>3</td><td>Reading the rest of the filesystem, network egress, uid-based damage</td><td>A kernel bug</td><td>Platform-specific</td></tr><tr><td>4</td><td>Everything above, portably, plus a disposable filesystem</td><td>Kernel exploits, host mounts, the docker socket</td><td>A Dockerfile</td></tr><tr><td>5</td><td>Most kernel exploits; VM-escape-level separation</td><td>Misconfiguration</td><td>Runtime install + ops</td></tr><tr><td>6</td><td>Everything, including your host existing</td><td>Latency, network dependency, cost</td><td>An API key</td></tr></tbody></table></div><div class="callout">The useful rule: <strong>climb only as far as the unattended case requires.</strong> Tiers 1&ndash;2 are worth having even at tier 4, because they fail with a readable error instead of a container startup cost &mdash; and they are what the tests can exercise offline.</div>
+</section>
+<section id="tier0">
+<h2><span class="num">03</span><span>Tier 0 &mdash; the prompt</span></h2>
+
+<p>Tier 0 is what most agent demos ship: a system prompt that says <em>work inside the sandboxed folder</em>,
+plus an approval prompt on commands. It is worth naming as a tier rather than skipping, because it is not
+nothing &mdash; and because its failure mode is instructive. A model that has read a thousand shell tutorials
+will eventually <code>cd ..</code>, not out of malice but because it is trying to be helpful.</p>
+
+<p>On the day the model is helpful in the wrong direction, tier 0 turns a demo into an incident. The rest of
+this page is the cheap insurance.</p>
+<div class="callout warn"><strong>Language matters here.</strong> Calling the folder a &ldquo;sandbox&rdquo; when only the prompt enforces it is how a demo becomes a cautionary tale. Either the mechanism is there or the claim is not.</div>
+</section>
+<section id="tier1">
+<h2><span class="num">04</span><span>Tier 1 &mdash; containment in code</span></h2>
+
+<p>This is the rung the repo is already on, and the first one worth writing because it costs nothing and its
+tests never touch the network. Every file tool funnels through one function, so there is exactly one place
+to be right.</p>
+<figure class="code"><figcaption><span>src/workspace.js &amp;mdash; the containment check</span><span class="lang">javascript</span></figcaption><pre>resolve(requested) {
+  const raw = requested.trim();
+  const expanded = expandVars(raw);                      // ~ and %VAR% and $VAR
+
+  if (/^[A-Za-z]:/.test(raw))      throw new PathError(`absolute or drive-relative path is outside the workspace: ${raw}`);
+  if (/^(\\\\|\/\/)/.test(raw))    throw new PathError(`UNC path is outside the workspace: ${raw}`);
+  if (path.isAbsolute(expanded))   throw new PathError(`absolute path is outside the workspace: ${raw}`);
+
+  const first = raw.split(/[\\/]/)[0].toLowerCase().replace(/:$/, &#x27;&#x27;);
+  if (/^[~$%]/.test(first) &amp;&amp; first !== raw)
+    throw new PathError(`home/environment path is outside the workspace: ${raw}`);
+
+  const abs  = path.resolve(this.root, expanded);
+  const real = realResolve(abs);                         // deepest existing ancestor, realpath&#x27;d
+  if (!isInside(this.root, real)) throw new PathError(`path escapes the workspace: ${raw}`);
+
+  return { abs: real, rel: path.relative(this.root, real) };
+}</pre></figure>
+<p>Two design choices are worth copying whatever tier you land on. First, the check throws a typed
+<code>PathError</code> that the dispatcher turns into an <code>ERROR:</code> string, so a refusal is an
+observation the model can read rather than a crash. Second, it refuses <em>before</em> resolving, so the error
+message describes the request instead of a half-computed path.</p>
+<figure class="code"><figcaption><span>src/workspace.js &amp;mdash; why a string check is not enough</span><span class="lang">javascript</span></figcaption><pre>function realResolve(abs) {
+  // realpath the deepest ancestor that exists, then re-append the tail
+  let p = abs, tail = &#x27;&#x27;;
+  while (!fs.existsSync(p)) {
+    const parent = path.dirname(p);
+    if (parent === p) break;
+    tail = path.join(path.basename(p), tail);
+    p = parent;
+  }
+  return path.join(fs.realpathSync.native(p), tail);
+}</pre></figure><div class="callout"><strong>What tier 1 buys:</strong> a model that hallucinates <code>../../../.env</code> gets a sentence back and tries again. <strong>What it does not buy:</strong> anything about <code>run_command</code>, which has no path to check because a shell is not a path.</div>
+</section>
+<section id="tier2">
+<h2><span class="num">05</span><span>Tier 2 &mdash; process hardening</span></h2>
+
+<p>The next rung is still ordinary code, and it is where most of the real-world value is. Four things, none of
+them exotic: a deny-list, a timeout, an output cap, and an environment scrub.</p>
+<figure class="code"><figcaption><span>src/tools.js &amp;mdash; the hard-deny list, checked before policy</span><span class="lang">javascript</span></figcaption><pre>const HARD_DENY = [
+  { re: /rm\s+-rf\s+[\/~]/i,           why: &#x27;recursive delete of a root path&#x27; },
+  { re: /\bdel\s+\/[sq]\b/i,            why: &#x27;recursive or quiet Windows delete&#x27; },
+  { re: /\b(format|diskpart)\b/i,       why: &#x27;disk formatting&#x27; },
+  { re: /\b(shutdown|reboot)\b/i,       why: &#x27;machine power control&#x27; },
+  { re: /git\s+push\s+(-f|--force)/i,   why: &#x27;force push&#x27; },
+  { re: /(curl|wget)[^|]*\|\s*(sh|bash)/i, why: &#x27;piping the internet into a shell&#x27; },
+  { re: /:\(\)\s*\{.*\|.*\};:/,         why: &#x27;fork bomb&#x27; },
+  { re: /&gt;\s*\/dev\/sd[a-z]/i,          why: &#x27;raw disk write&#x27; },
+];</pre></figure>
+<p>A deny-list is a seatbelt, not a boundary: it catches the eight ways a model ruins a demo, and it catches
+nothing that was written to get past it. That is fine at this rung, as long as nobody calls it isolation.</p>
+
+<h3>The three bounds around a spawned process</h3>
+<figure class="code"><figcaption><span>src/tools.js &amp;mdash; bounded execution (condensed)</span><span class="lang">javascript</span></figcaption><pre>function runShell(command, cwd, { timeoutMs = 30000, maxBytes = 64 * 1024 } = {}) {
+  return new Promise((done) =&gt; {
+    const child = spawn(command, { cwd, shell: true, windowsHide: true,
+                                   env: safeEnv(),          // &lt;- see below
+                                   detached: process.platform !== &#x27;win32&#x27; });
+
+    let out = &#x27;&#x27;, err = &#x27;&#x27;, truncated = false;
+    const cap = (buf) =&gt; {
+      const s = buf.toString();
+      if (out.length + err.length + s.length &gt; maxBytes) { truncated = true; return; }
+      return s;
+    };
+    child.stdout.on(&#x27;data&#x27;, (d) =&gt; { const s = cap(d); if (s) out += s; });
+    child.stderr.on(&#x27;data&#x27;, (d) =&gt; { const s = cap(d); if (s) err += s; });
+
+    const timer = setTimeout(() =&gt; killTree(child), timeoutMs);
+    child.on(&#x27;close&#x27;, (code) =&gt; {
+      clearTimeout(timer);
+      done({ code, stdout: out + (truncated ? &#x27;\n[output truncated]&#x27; : &#x27;&#x27;), stderr: err });
+    });
+  });
+}</pre></figure><div class="callout warn"><strong>The environment is the leak nobody notices.</strong> A child process inherits <code>process.env</code>, which holds <code>OPENROUTER_API_KEY</code>. One <code>echo $OPENROUTER_API_KEY</code> puts the key into <code>messages</code>, which goes back to the provider and into your logs. <code>safeEnv()</code> should hand the child a short allow-list &mdash; <code>PATH</code>, <code>HOME</code>, <code>TMPDIR</code>, nothing else.</div><figure class="code"><figcaption><span>the two functions that make the bounds real</span><span class="lang">javascript</span></figcaption><pre>function safeEnv() {
+  const keep = [&#x27;PATH&#x27;, &#x27;PATHEXT&#x27;, &#x27;HOME&#x27;, &#x27;USERPROFILE&#x27;, &#x27;TMPDIR&#x27;, &#x27;TEMP&#x27;, &#x27;TMP&#x27;, &#x27;SYSTEMROOT&#x27;, &#x27;COMSPEC&#x27;];
+  const env = {};
+  for (const k of keep) if (process.env[k] !== undefined) env[k] = process.env[k];
+  return env;
+}
+
+function killTree(child) {
+  if (process.platform === &#x27;win32&#x27;) spawn(&#x27;taskkill&#x27;, [&#x27;/pid&#x27;, String(child.pid), &#x27;/t&#x27;, &#x27;/f&#x27;]);
+  else process.kill(-child.pid, &#x27;SIGKILL&#x27;);       // the negative pid hits the group
+}</pre></figure>
+<p><code>killTree</code> matters more than it looks: a 30-second timeout that kills only the shell leaves
+<code>node</code> or <code>npm</code> running, and a demo with three orphans on port 5000 is a demo that
+&ldquo;mysteriously&rdquo; stopped working.</p>
+
+</section>
+<section id="gap">
+<h2><span class="num">06</span><span>Why hardening is not isolation</span></h2>
+
+<p>Everything in tiers 1&ndash;2 is advice the process gives itself. The process can also ignore it, because
+the model does not run in the harness &mdash; it emits a string, and the harness hands that string to a shell
+that has all of the harness's privileges.</p>
+
+<p>A single command is enough to show the gap:</p>
+<figure class="code"><figcaption><span>one command, no path check, no container</span><span class="lang">shell</span></figcaption><pre>cd /c/Users/you &amp;&amp; ls -la .ssh &amp;&amp; cat .ssh/id_rsa | head -3</pre></figure>
+<p>There is no <code>resolve()</code> call anywhere in that line. <code>run_command</code> starts in
+<code>workspace/</code> and the first thing a shell can do is leave. Nothing in tiers 1&ndash;2 changes that,
+and pretending otherwise is the mistake this page exists to prevent.</p>
+<div class="table-wrap"><table><thead><tr><th>Property</th><th>Tier 1</th><th>Tier 2</th></tr></thead><tbody><tr><td>Can write outside the workspace</td><td>via file tools: no</td><td>via file tools: no</td></tr><tr><td>Can write outside the workspace</td><td>via <code>run_command</code>: yes</td><td>via <code>run_command</code>: yes</td></tr><tr><td>Can read <code>~/.ssh</code></td><td>yes, through the shell</td><td>yes, through the shell</td></tr><tr><td>Can reach the network</td><td>yes</td><td>yes (<code>curl</code> blocked, <code>node -e</code> not)</td></tr><tr><td>Can see the API key</td><td>yes</td><td>no, with <code>safeEnv()</code></td></tr><tr><td>Can run for ten minutes</td><td>no</td><td>no, 30&nbsp;s timeout</td></tr></tbody></table></div><div class="callout"><strong>So why bother?</strong> Because these two rungs make the common case fail loudly and cheaply, and they keep working after you add a container. A refusal that costs one loop step is better than a container start that costs two seconds.</div>
+</section>
+<section id="tier3">
+<h2><span class="num">07</span><span>Tier 3 &mdash; operating system</span></h2>
+
+<p>The next rung uses the thing that already exists for this: the operating system. The idea is one sentence
+&mdash; run the command as a different user, in a different namespace, with no network &mdash; and the
+implementations are wildly platform-specific.</p>
+
+<h3>Linux: namespaces in one command</h3>
+<figure class="code"><figcaption><span>bubblewrap (the flatpak sandbox) &amp;mdash; rootless, no daemon</span><span class="lang">shell</span></figcaption><pre>bwrap --unshare-all --die-with-parent \
+  --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64 \
+  --bind &quot;$PWD&quot; /work --chdir /work \
+  --tmpfs /tmp --proc /proc --dev /dev \
+  --new-session -- /bin/sh -lc &quot;$COMMAND&quot;</pre></figure>
+<p>Swap <code>bwrap</code> for <code>nsjail</code> when you also want a seccomp filter, a uid map and a
+per-run network namespace, or for <code>unshare --user --map-root-user --net --mount</code> when you want to
+write it yourself and debug it. This is the lightest real isolation available on Linux: single-digit
+milliseconds, no image to build, and the flags <em>are</em> the policy, which makes it auditable.</p>
+
+<h3>Windows: no equivalent, and that is the finding</h3>
+<div class="table-wrap dense"><table><thead><tr><th>Mechanism</th><th>What it gives</th><th>Reality for this project</th></tr></thead><tbody><tr><td><code>runas</code> / a second local user</td><td>a different uid for file permissions</td><td>needs a password prompt; file ACLs must actually deny the workspace to the other user</td></tr><tr><td>Job objects</td><td>memory and CPU caps, kill-on-close</td><td>good for bounds, gives no filesystem or network isolation</td></tr><tr><td>AppContainer / restricted token</td><td>the real per-app sandbox WinRT uses</td><td>not reachable from Node without native code or a helper binary</td></tr><tr><td>Windows Sandbox</td><td>a disposable desktop VM</td><td>Pro/Enterprise only, tens of seconds to start, awkward to script per-command</td></tr><tr><td>WSL2 + Docker</td><td>a Linux kernel in a VM</td><td>the practical answer on Windows, which is why the next tier is Docker</td></tr></tbody></table></div><div class="callout warn"><strong>Pragmatic conclusion:</strong> on Windows, tier 3 is either &ldquo;add bounds and accept the gap&rdquo; or &ldquo;go straight to Docker&rdquo;. Nobody writes an AppContainer wrapper for a meetup demo, and the people who do are writing it for a product.</div>
+</section>
+<section id="tier4">
+<h2><span class="num">08</span><span>Tier 4 &mdash; Docker</span></h2>
+
+<p>This is the rung most teams land on, and the one this page spends its time on, because it is the first that
+gives you a disposable filesystem <em>and</em> a network namespace <em>and</em> works the same on Windows,
+macOS and Linux &mdash; once Docker Desktop is installed.</p>
+
+<p>The whole design fits in one <code>docker run</code>. The flags matter more than the image:</p>
+<figure class="code"><figcaption><span>the flag set that turns a container into a sandbox</span><span class="lang">shell</span></figcaption><pre>docker run --rm --init \
+  --network none \
+  --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m \
+  --memory 512m --memory-swap 512m --pids-limit 128 --cpus 1 \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --user 65534:65534 \
+  --mount type=bind,source=&quot;$PWD/workspace&quot;,target=/work \
+  -w /work \
+  node:20-alpine sh -lc &quot;node demo/hello.js&quot;</pre></figure><div class="table-wrap"><table><thead><tr><th>Flag</th><th>What it prevents</th></tr></thead><tbody><tr><td><code>--network none</code></td><td>Exfiltration, <code>npm install</code> at run time, and a model that decides to fetch a package it half-remembers.</td></tr><tr><td><code>--read-only</code> + <code>--tmpfs /tmp</code></td><td>Writes anywhere except the mount and a 64&nbsp;MB scratch dir. Deleting the container deletes them.</td></tr><tr><td><code>--memory</code>, <code>--memory-swap</code></td><td>A runaway allocation that takes the laptop with it.</td></tr><tr><td><code>--pids-limit</code></td><td>Fork bombs, and <code>npm</code>'s habit of spawning a process tree.</td></tr><tr><td><code>--cpus 1</code></td><td>A hot loop that makes the demo machine unusable.</td></tr><tr><td><code>--cap-drop ALL</code></td><td>The handful of capabilities root-in-container gets by default.</td></tr><tr><td><code>--security-opt no-new-privileges</code></td><td>Regaining privilege through a setuid binary.</td></tr><tr><td><code>--user 65534:65534</code></td><td>Files in the mount being written as your user &mdash; <code>nobody</code> has to be given permission deliberately.</td></tr><tr><td><code>--rm --init</code></td><td>Leftover containers, and zombie children holding the image lock.</td></tr></tbody></table></div><div class="callout warn"><strong>The one flag you must never add.</strong> Do not mount <code>/var/run/docker.sock</code> into the sandbox. It is not a file, it is root on the host: anything with the socket can start a privileged container and mount <code>/</code>.</div>
+<h3>Wiring it into the harness</h3>
+
+<p>The pleasant surprise is how little changes. <code>run_command</code> already returns
+<code>{ code, stdout, stderr }</code>, so the container version is the same function with a different
+<code>spawn</code> target &mdash; the timeout, the output cap and the tool result string all stay:</p>
+<figure class="code"><figcaption><span>src/sandbox/docker.js &amp;mdash; illustrative sketch, not yet in the repo</span><span class="lang">javascript</span></figcaption><pre>export function dockerSandbox(root, image = &#x27;node:20-alpine&#x27;) {
+  return {
+    name: `docker:${image}`,
+
+    async exec(command, { timeoutMs = 30000 } = {}) {
+      const args = [
+        &#x27;run&#x27;, &#x27;--rm&#x27;, &#x27;--init&#x27;,
+        &#x27;--network&#x27;, &#x27;none&#x27;,
+        &#x27;--read-only&#x27;,
+        &#x27;--tmpfs&#x27;, &#x27;/tmp:rw,noexec,nosuid,size=64m&#x27;,
+        &#x27;--memory&#x27;, &#x27;512m&#x27;, &#x27;--memory-swap&#x27;, &#x27;512m&#x27;,
+        &#x27;--pids-limit&#x27;, &#x27;128&#x27;, &#x27;--cpus&#x27;, &#x27;1&#x27;,
+        &#x27;--cap-drop&#x27;, &#x27;ALL&#x27;,
+        &#x27;--security-opt&#x27;, &#x27;no-new-privileges&#x27;,
+        &#x27;--user&#x27;, &#x27;65534:65534&#x27;,
+        &#x27;--mount&#x27;, `type=bind,source=${root},target=/work`,
+        &#x27;-w&#x27;, &#x27;/work&#x27;,
+        image, &#x27;sh&#x27;, &#x27;-lc&#x27;, command,
+      ];
+      return await runBounded(&#x27;docker&#x27;, args, { timeoutMs });   // same spawn + killTree as tier 2
+    },
+  };
+}</pre></figure>
+<p>Two details earn their keep. <code>runBounded</code> is the tier-2 function with the shell swapped for an
+argv array, so escaping stops being a quoting problem. And the mount is the <em>only</em> writable host path,
+which means the model can still create files your editor can open &mdash; the demo stays a demo.</p>
+
+</section>
+<section id="dockerlimits">
+<h2><span class="num">09</span><span>What Docker does not give you</span></h2>
+
+<p>A container is a process with a convincing costume: the same kernel, a different view of it. That view is
+strong enough for the threat model in chapter 01 and weak enough that it must be described accurately.</p>
+<div class="table-wrap"><table><thead><tr><th>Claim</th><th>Reality</th></tr></thead><tbody><tr><td>&ldquo;The container cannot see my files&rdquo;</td><td>True for everything not mounted. The bind mount is deliberate and is the escape hatch you built.</td></tr><tr><td>&ldquo;The container cannot escape&rdquo;</td><td>It shares the host kernel. A kernel privilege-escalation bug is a container escape; that is why tier 5 exists.</td></tr><tr><td>&ldquo;It runs as <code>nobody</code> so it cannot hurt anything&rdquo;</td><td>True until something in the mount is owned by <code>nobody</code>, or a setuid binary creeps into the image.</td></tr><tr><td>&ldquo;The code inside is safe to run&rdquo;</td><td>The image is code you pulled from a registry. Pin by digest and rebuild it yourself, or the sandbox's supply chain is the model's supply chain.</td></tr><tr><td>&ldquo;Docker Desktop on Windows is a Linux host&rdquo;</td><td>It is a VM. That is <em>better</em> for you &mdash; the host filesystem is not the container's kernel neighbour &mdash; but the mount is still a real host folder, and it is slow.</td></tr><tr><td>&ldquo;A symlink written in the mount is harmless&rdquo;</td><td>The container can create <code>workspace/x -&gt; C:/Users/you/.ssh</code>. Host-side file tools must still call <code>resolve()</code>, which realpaths the link and refuses it. Container isolation does not replace the check; it protects the shell.</td></tr></tbody></table></div><div class="callout"><strong>Keep tier 1 running underneath tier 4.</strong> The container guards the shell; <code>Workspace.resolve()</code> guards the file tools, including anything the container left behind in the shared folder. They cover different holes.</div>
+<h3>The costs nobody mentions in the slide</h3>
+<ul><li><strong>Image pull is the real start time.</strong> A warm local image starts in a fraction of a second; the first run on a fresh laptop pulls hundreds of megabytes over the meetup wifi, in front of the room.</li><li><strong>Docker Desktop is another failure surface.</strong> A demo that now has two ways to fail (the model, and the daemon) needs a fallback: <code>--sandbox local</code> should still work.</li><li><strong>Bind-mount permissions on Windows</strong> map differently through the VM, so files land as a uid the host does not have. <code>chmod</code> inside is cosmetic; plan for it or the <code>npm test</code> inside the container fails for a reason unrelated to the agent.</li><li><strong>Networking is off, so nothing installs.</strong> If the task needs a dependency, bake it into the image or mount a <code>node_modules</code> &mdash; the model cannot invent one at run time, which is a feature you should say out loud.</li><li><strong>Startup latency lands inside the loop.</strong> One container per command is correct and slow (~0.5&nbsp;s each). One long-lived container with <code>docker exec</code> is fast, and now the command has state &mdash; a shell that remembers <code>cd</code>, and files that persist between steps. That is usually what you want; it is a different design, and it needs a <code>stop()</code>.</li></ul>
+</section>
+<section id="tier5">
+<h2><span class="num">10</span><span>Tier 5 &mdash; stronger kernel isolation</span></h2>
+
+<p>Tier 5 is for the day a container is not enough: multi-tenant, untrusted code, or a security review that
+asks what happens when the kernel is wrong. There are three shapes.</p>
+
+b += table(
+    ["Shape", "Example", "What changes"],
+    [
+        ["User namespaces", "rootless Docker, <code>userns-remap</code>, Podman",
+         "Root in the container is not root on the host. Cheapest real hardening: same <code>docker run</code>, though it is broken on some CI runners."],
+        ["Userspace kernel", "gVisor (<code>--runtime=runsc</code>)",
+         "Syscalls are intercepted and re-implemented in Go, so a kernel bug becomes a gVisor bug. Costs a few percent to a few times on syscall-heavy work, which <code>npm install</code> is."],
+        ["Own kernel", "Kata Containers, Firecracker microVMs",
+         "A hardware virtualisation boundary per sandbox. Firecracker's own figures are ~125&nbsp;ms boot and a few MB of overhead, which is why it underpins the hosted sandboxes in chapter 11."],
+    ])
+<figure class="code"><figcaption><span>the swap is one flag, if you built the interface</span><span class="lang">shell</span></figcaption><pre># same interface, different runtime — the code above does not change
+docker run --runtime=runsc ...            # gVisor
+docker run --runtime=kata-runtime ...     # Kata microVM</pre></figure><div class="callout"><strong>Verdict for a meetup demo:</strong> tier 5 is where you stop and say &ldquo;this is a product decision&rdquo;. The interesting content for the room is that the interface exists, so the runtime is a flag rather than a rewrite.</div>
+</section>
+<section id="tier6">
+<h2><span class="num">11</span><span>Tier 6 &mdash; someone else's machine</span></h2>
+
+<p>Two ways to not run the sandbox yourself. They look similar and solve different problems.</p>
+
+<h3>Hosted sandboxes: an API call per run</h3>
+<figure class="code"><figcaption><span>E2B-shaped API &amp;mdash; Modal, Daytona and Cloudflare&#x27;s Sandbox SDK are variations</span><span class="lang">javascript</span></figcaption><pre>import { Sandbox } from &#x27;e2b&#x27;;
+
+const sbx = await Sandbox.create({ template: &#x27;node20&#x27; });     // ~1 s cold, faster warm
+try {
+  await sbx.files.write(&#x27;/work/hello.js&#x27;, source);
+  const res = await sbx.commands.run(&#x27;node hello.js&#x27;, { timeoutMs: 30000 });
+  console.log(res.exitCode, res.stdout, res.stderr);
+} finally {
+  await sbx.kill();
+}</pre></figure><div class="table-wrap dense"><table><thead><tr><th>Gain</th><th>Give up</th></tr></thead><tbody><tr><td>Isolation is their problem, and they take it more seriously than you will</td><td>Every command is a network round trip; the demo now needs wifi</td></tr><tr><td>Per-run VM or microVM, so state cannot leak between users</td><td>Your workspace lives on someone else's disk, and so does the code</td></tr><tr><td>Horizontal scale: one sandbox per task, ten at once</td><td>Latency floor of a few hundred ms per call, plus a vendor SDK in the tool handler</td></tr><tr><td>No Docker Desktop on the demo laptop</td><td>An account, a key, and a quota &mdash; three new ways for the talk to fail</td></tr></tbody></table></div><div class="callout warn"><strong>The honest fit:</strong> tier 6 is right for a product that runs untrusted code for strangers. For one laptop and one audience it is more moving parts than the risk justifies &mdash; but it is the right answer to &ldquo;how would you ship this?&rdquo; and worth one slide.</div>
+<h3>WASM: a sandbox for expressions, not for programs</h3>
+
+<p>If the untrusted thing is a <em>computation</em> rather than a coding agent, a WebAssembly runtime is the
+cheapest real boundary there is: no syscalls to intercept, an in-memory filesystem, no network, and
+microsecond start-up. QuickJS or Pyodide in a Node worker gets you a scripting sandbox in a few dozen lines.</p>
+
+<p>It is not a coding sandbox. There is no <code>npm</code>, no native binary, no long-running server, no
+<code>git</code>, and no <code>spawn</code> &mdash; which is exactly the list a coding agent needs. File it
+under &ldquo;the other tool you might reach for&rdquo;, not under &ldquo;the answer&rdquo;.</p>
+
+</section>
+<section id="wire">
+<h2><span class="num">12</span><span>Wiring it into the agent</span></h2>
+
+<p>Every tier above changes what happens inside <code>run_command</code> and almost nothing else. That is the
+argument for defining the seam early: one module, one contract, three implementations, chosen by config.</p>
+<figure class="code"><figcaption><span>the interface that makes the ladder a config option</span><span class="lang">javascript</span></figcaption><pre>// src/sandbox/index.js — everything the tool layer is allowed to know about isolation
+//
+//   { name, exec(command, { timeoutMs }) -&gt; { code, stdout, stderr }, stop() }
+
+export function createSandbox(mode, { root }) {
+  switch (mode) {
+    case &#x27;local&#x27;:  return localSandbox(root);    // tiers 1–2, today
+    case &#x27;docker&#x27;: return dockerSandbox(root);   // tier 4
+    case &#x27;remote&#x27;: return e2bSandbox(root);      // tier 6
+    default: throw new Error(`unknown sandbox mode: ${mode}`);
+  }
+}</pre></figure><figure class="code"><figcaption><span>the diff, in full</span><span class="lang">javascript</span></figcaption><pre>// src/tools.js — before
+const { code, stdout, stderr } = await runShell(command, ws.root);
+
+// src/tools.js — after
+const { code, stdout, stderr } = await ctx.sandbox.exec(command, { timeoutMs: 30000 });</pre></figure>
+<p>Three things to keep in mind when you do this refactor.</p>
+<ul><li><strong>Keep <code>HARD_DENY</code> and <code>CMD_POLICY</code> outside the sandbox.</strong> They are policy about the model, not capability of the runtime. A container does not make <code>git push --force</code> acceptable.</li><li><strong>Let the file tools stay host-side at tier 4</strong> &mdash; the mount makes it work, and <code>resolve()</code> keeps working. Only at tier 6 do reads and writes become RPC, and that is when the tool handlers genuinely change shape.</li><li><strong>Make the mode a startup banner line.</strong> <code>sandbox: docker (network none, 512 MB)</code> printed once tells the audience, and tells you in a bug report, which tier is actually running.</li></ul><div class="callout warn"><strong>Name the degradation explicitly.</strong> If Docker is missing, do not silently fall back to <code>local</code>. Print <code>sandbox: local (no isolation for commands)</code> and carry on &mdash; a visible downgrade is safe, a silent one is how the wrong thing ships.</div>
+</section>
+<section id="attack">
+<h2><span class="num">13</span><span>Red-team it</span></h2>
+
+<p>A sandbox you have not attacked is a sandbox you are guessing about. These are the checks that separate
+&ldquo;we configured it&rdquo; from &ldquo;we tried it&rdquo;, and they double as offline tests for tiers
+1&ndash;2.</p>
+<div class="table-wrap dense"><table><thead><tr><th>Attempt</th><th>Tier 1&ndash;2</th><th>Tier 4</th><th>Tier 6</th></tr></thead><tbody><tr><td><code>cat ~/.ssh/id_rsa</code></td><td>succeeds</td><td>no such file</td><td>no such file</td></tr><tr><td><code>echo $OPENROUTER_API_KEY</code></td><td>leaks, unless <code>safeEnv()</code></td><td>empty</td><td>empty</td></tr><tr><td><code>curl example.com</code></td><td>succeeds</td><td>no network</td><td>usually blocked</td></tr><tr><td><code>cd .. &amp;&amp; ls</code></td><td>your project root</td><td>container root</td><td>sandbox root</td></tr><tr><td><code>dd if=/dev/zero of=/tmp/x</code></td><td>fills the disk</td><td>tmpfs full at 64&nbsp;MB</td><td>capped</td></tr><tr><td><code>:(){ :|:&amp; };:</code></td><td>machine stalls</td><td>pids-limit kills it</td><td>capped</td></tr><tr><td><code>ln -s ~/.ssh x</code></td><td>shell follows it</td><td>host <code>resolve()</code> still refuses</td><td>n/a</td></tr><tr><td><code>sleep 600</code></td><td>killed at 30&nbsp;s</td><td>killed at 30&nbsp;s</td><td>killed at 30&nbsp;s</td></tr><tr><td><code>yes</code> forever</td><td>cut at 64&nbsp;KB</td><td>cut at 64&nbsp;KB</td><td>cut at 64&nbsp;KB</td></tr></tbody></table></div><figure class="code"><figcaption><span>the three that catch the regressions</span><span class="lang">javascript</span></figcaption><pre>// test/sandbox.test.js — the same table, as assertions (no Docker needed for the top half)
+test(&#x27;refuses a path that escapes the workspace&#x27;, () =&gt; {
+  assert.throws(() =&gt; ws.resolve(&#x27;../../secrets.txt&#x27;), /escapes the workspace/);
+});
+test(&#x27;a symlink out of the workspace is refused by its real target&#x27;, () =&gt; {
+  fs.symlinkSync(os.homedir(), path.join(root, &#x27;link&#x27;));
+  assert.throws(() =&gt; ws.resolve(&#x27;link/.ssh&#x27;), /escapes the workspace/);
+});
+test(&#x27;the environment handed to a command holds no keys&#x27;, () =&gt; {
+  assert.deepEqual(Object.keys(safeEnv()).filter(k =&gt; /KEY|TOKEN|SECRET/.test(k)), []);
+});</pre></figure>
+</section>
+<section id="recommend">
+<h2><span class="num">14</span><span>Which rung, when</span></h2>
+
+<p>The short version, for the demo and for the talk.</p>
+<div class="table-wrap dense"><table><thead><tr><th>Situation</th><th>Do this</th><th>Why</th></tr></thead><tbody><tr><td>The meetup demo, you at the keyboard</td><td>tiers 1&ndash;2, <code>CMD_POLICY=ask</code></td><td>The human is the control, and the loop is the thing you are showing.</td></tr><tr><td>Unattended run on your own machine</td><td>tier 4, <code>--yes</code>, <code>--network none</code></td><td>The container bounds the worst case; the deny-list still stops the obvious.</td></tr><tr><td>CI, or a second contributor</td><td>tier 4, one container per task</td><td>Reproducible: the image is the environment, and nothing secret is mounted.</td></tr><tr><td>Running other people's code</td><td>tier 5 or 6</td><td>Kernel boundary or their machine. Container isolation is not enough for strangers.</td></tr></tbody></table></div>
+<p>And the two sentences worth saying out loud in the room, because they are the whole talk:</p>
+<div class="callout"><strong>1.</strong> The sandbox is not the security model &mdash; the <em>interface</em> is. Once <code>run_command</code> goes through one function, isolation becomes a flag, and you can climb the ladder without rewriting the agent.<br><br><strong>2.</strong> Every tier below the one you need is a bug report waiting to happen; every tier above it is a demo that will not start. Tier 4 is the default because it is the cheapest rung that survives being left alone.</div>
+<p>Then demo the failure, not the success. Ask the agent to <code>cat .env</code>, let the refusal come back as
+a tool result, and watch it try another way &mdash; that is the loop doing its job, and the sandbox doing
+its.</p>
+
+</section>
+
+      <p class="colophon">
+        Companion page to <code>explainer.html</code> in <code>mini-coding-agent/</code>. Tier 1&ndash;2 excerpts
+        are from <code>src/workspace.js</code> and <code>src/tools.js</code> with logging trimmed; tier 3&ndash;6
+        snippets are illustrative sketches for this page, not yet in the repo. Flag semantics are
+        <code>docker run</code>'s own; start-up figures are rough orders of magnitude, not measurements taken here.
+        Built from a script so the page can be regenerated.
+      </p>
+    </div>
+  </main>
+
+</div>
+<script>
+
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var heads = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
+  var bar = document.getElementById('bar');
+  var toc = document.getElementById('toc');
+  var ticking = false;
+
+  function update(){
+    ticking = false;
+    var y = window.scrollY || document.documentElement.scrollTop;
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    if (bar) bar.style.width = (max > 0 ? Math.min(100, (y / max) * 100) : 0) + '%';
+
+    var active = 0;
+    for (var i = 0; i < heads.length; i++){
+      var h = heads[i];
+      if (h && h.getBoundingClientRect().top <= 130) active = i;
+    }
+    links.forEach(function(a, i){ a.classList.toggle('active', i === active); });
+
+    var el = links[active];
+    if (el && toc && window.innerWidth > 940){
+      var lr = el.getBoundingClientRect(), tr = toc.getBoundingClientRect();
+      if (lr.top < tr.top + 4 || lr.bottom > tr.bottom - 4){
+        el.scrollIntoView({block:'nearest'});
+      }
+    }
+  }
+
+  window.addEventListener('scroll', function(){
+    if (!ticking){ ticking = true; window.requestAnimationFrame(update); }
+  }, {passive:true});
+  window.addEventListener('resize', update);
+  update();
+})();
+
+</script>
+</body>
+</html>
