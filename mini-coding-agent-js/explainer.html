@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>mini-coding-agent &middot; how an agent actually works</title>
+<title>mini-coding-js &middot; how an agent actually works</title>
 <style>
 html{font-size:24px}
 
@@ -263,7 +263,7 @@ tbody td:first-child{white-space:nowrap}
 
   <aside class="sidebar">
     <a class="side-kicker" href="#top">Brighton Dev AI &middot; Nov 2026</a>
-    <p class="side-title">mini-coding-agent</p>
+    <p class="side-title">mini-coding-js</p>
     <p class="side-sub">An agent is a model, six tools and a loop. This is all of it.</p>
     <div class="side-rule"></div>
     <p class="side-label">Contents</p>
@@ -285,7 +285,7 @@ tbody td:first-child{white-space:nowrap}
 <a href="#limits"><span class="n">15</span><span>What it deliberately does not do</span></a>
     </nav>
     <div class="side-foot">
-      Source: <code>mini-coding-agent/</code><br>
+      Source: <code>mini-coding-js/</code><br>
       948 lines &middot; Node 20+ &middot; one dependency<br>
       Chapters 01&ndash;15 follow the files.
     </div>
@@ -317,7 +317,7 @@ produce text, a set of <strong>tools</strong> that can actually do something, an
 hands the model's own text back to it as an observation. Everything else &mdash; retries, memory, sub-agents,
 skills, permissions, project rules &mdash; is a layer laid on top of those three.</p>
 
-<p><em>mini-coding-agent</em> is those three things and nothing else: 948 lines in <code>src/</code>, one
+<p><em>mini-coding-js</em> is those three things and nothing else: 948 lines in <code>src/</code>, one
 dependency (<code>chalk</code>, for colour), no SDK, no framework. The model is reached with a single
 <code>fetch</code>. This page walks the whole program, in the order you would read it.</p>
 
@@ -457,7 +457,7 @@ client is 66 lines (<code>src/llm.js</code>).</p>
     headers: {
       Authorization: `Bearer ${apiKey}`,
       &#x27;Content-Type&#x27;: &#x27;application/json&#x27;,
-      &#x27;X-Title&#x27;: &#x27;min-coding-agent&#x27;,
+      &#x27;X-Title&#x27;: &#x27;min-coding-js&#x27;,
     },
     body: JSON.stringify({ model, messages, tools, max_tokens: 2048 }),
   });
@@ -813,8 +813,8 @@ respects the model and one that argues with it.</div>
 
 <p>Everything on this page so far is description. This is a real run, captured from
 <code>node src/agent.js --demo</code> with colour disabled, unedited:</p>
-<figure class="code"><figcaption><span>terminal</span><span class="lang">console</span></figcaption><pre>min-coding-agent
-workspace : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-agent\workspace
+<figure class="code"><figcaption><span>terminal</span><span class="lang">console</span></figcaption><pre>min-coding-js
+workspace : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-js\workspace
 model     : scripted (no network)
 key       : -
 env file  : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\.env
@@ -868,7 +868,7 @@ Done. Created demo/hello.js, ran it, edited one string, re-ran it. The exit code
 
 <p>Node 20+ and one <code>npm install</code>. The <code>.env</code> at the repository root is found
 automatically, so nothing has to be copied for a live run.</p>
-<figure class="code"><figcaption><span>quickstart</span><span class="lang">bash</span></figcaption><pre>cd mini-coding-agent
+<figure class="code"><figcaption><span>quickstart</span><span class="lang">bash</span></figcaption><pre>cd mini-coding-js
 npm install                       # one dependency: chalk
 
 npm start                         # live model, task typed at the &quot;task ›&quot; prompt
@@ -909,7 +909,7 @@ seen a coding agent do is built from these pieces &mdash; and now you know what 
 </section>
 
       <p class="colophon">
-        Built from the source in <code>mini-coding-agent/</code> &mdash; every excerpt is real code with only the
+        Built from the source in <code>mini-coding-js/</code> &mdash; every excerpt is real code with only the
         logging lines trimmed and long lines rewrapped to fit, and the run in chapter 13 is a captured terminal
         session.
         Tests: <code>npm test</code> (40 offline, no key, no network). Demo: <code>npm run demo</code>.

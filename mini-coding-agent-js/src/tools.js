@@ -134,6 +134,24 @@ const HARD_DENY = [
 const MAX_OUTPUT = 6000;
 const TIMEOUT_MS = 30_000;
 
+/**
+ * The child gets a short allow-list, not `process.env`.
+ * A shell that inherits the harness's environment can do
+ * `node -e "console.log(process.env.OPENROUTER_API_KEY)"` and put the key
+ * straight into messages, the provider and your logs. Paths and the temp dir
+ * are all a subprocess legitimately needs.
+ */
+const ENV_ALLOW = [
+  'PATH', 'PATHEXT', 'HOME', 'USERPROFILE', 'TMPDIR', 'TEMP', 'TMP',
+  'SYSTEMROOT', 'COMSPEC', 'SHELL', 'LANG', 'LC_ALL', 'TERM',
+];
+
+export function safeEnv(source = process.env) {
+  const env = {};
+  for (const key of ENV_ALLOW) if (source[key] !== undefined) env[key] = source[key];
+  return env;
+}
+
 function clip(text, limit = MAX_OUTPUT) {
   const s = String(text ?? '');
   return s.length <= limit ? s : `${s.slice(0, limit)}\n... [${s.length - limit} chars truncated]`;
@@ -143,7 +161,14 @@ function runShell(command, cwd) {
   return new Promise((resolve) => {
     exec(
       command,
-      { cwd, timeout: TIMEOUT_MS, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'utf8' },
+      {
+        cwd,
+        timeout: TIMEOUT_MS,
+        maxBuffer: 1024 * 1024,
+        windowsHide: true,
+        encoding: 'utf8',
+        env: safeEnv(),
+      },
       (err, stdout, stderr) => {
         resolve({
           code: err ? (typeof err.code === 'number' ? err.code : 1) : 0,
@@ -316,3 +341,11 @@ export async function runTool(name, rawArgs, ctx) {
 }
 
 export const TOOL_NAMES = Object.keys(HANDLERS);
+
+/** The bounds that are configured rather than exercised by a demo step. */
+export const SANDBOX_LIMITS = {
+  maxOutput: MAX_OUTPUT,
+  timeoutMs: TIMEOUT_MS,
+  denyPatterns: HARD_DENY.length,
+  envKeys: ENV_ALLOW.length,
+};

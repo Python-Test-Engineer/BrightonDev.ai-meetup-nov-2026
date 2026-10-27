@@ -15,7 +15,7 @@ OPENROUTER.txt
 HERMES-KEYS.md
 
 # ===========================================================
-# Node (mini-coding-agent)
+# Node (mini-coding-js)
 # ===========================================================
 node_modules/
 **/node_modules/
@@ -52,8 +52,8 @@ live_bikeshare_*.csv
 
 # Agent sandbox output - uncomment to keep demo artefacts out of git
 # (the .gitkeep placeholder stays tracked)
-#mini-coding-agent/workspace/*
-#!mini-coding-agent/workspace/.gitkeep
+#mini-coding-js/workspace/*
+#!mini-coding-js/workspace/.gitkeep
 
 # ===========================================================
 # Editor / OS / temp

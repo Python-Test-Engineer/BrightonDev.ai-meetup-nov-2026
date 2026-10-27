@@ -1,3 +1,45 @@
+/**
+ * config.js - resolves everything the agent needs to run: credentials, model,
+ * sandbox location, command policy and budgets. This is the single place that
+ * reads the environment, so the rest of the code just receives a config object.
+ *
+ * WHY THIS FILE EXISTS: a meetup repo has one `.env` at the root, older checkouts
+ * use different variable names, and a stale key exported in `~/.bashrc` can
+ * silently shadow the one you just wrote. All of that ambiguity is resolved here
+ * and reported back (`apiKeySource`, `modelSource`, `apiKeyOverrodeShell`, ...)
+ * so the startup banner can show what actually won.
+ *
+ * CONFIG OPTIONS (read from the nearest `.env`, then the shell):
+ *
+ *   OPENROUTER_API_KEY  | OPENROUTER_KEY   required in live mode. Both names are
+ *                                            accepted; the key is never logged,
+ *                                            only `fingerprint()`ed.
+ *   OPENROUTER_MODEL    | MODEL            default 'deepseek/deepseek-v4.1-flash-1017'.
+ *                                            A bare name (e.g. `gpt-4o-mini`) is
+ *                                            expanded to vendor/model via
+ *                                            VENDOR_BY_PREFIX, because OpenRouter
+ *                                            returns 400 without a vendor prefix.
+ *   OPENROUTER_PROVIDER_PREFIX             force the vendor prefix used for bare
+ *                                            model names (overrides the lookup
+ *                                            table above).
+ *   CMD_POLICY                             'allow' | 'ask' | 'deny' (default 'ask').
+ *                                            Whether shell commands run freely,
+ *                                            need confirmation, or are refused.
+ *   MAX_STEPS                              default 12. Max agent loop iterations
+ *                                            before it gives up and summarises.
+ *   REQUEST_TIMEOUT_MS                     default 90000. Per-request timeout so a
+ *                                            stalled provider fails instead of
+ *                                            hanging the session.
+ *   WORKSPACE_DIR                          default 'workspace'. Sandbox root the
+ *                                            agent may read/write, relative to the
+ *                                            package root.
+ *
+ * PRECEDENCE: explicit overrides (CLI `--model`, `loadConfig({...})`) > nearest
+ * `.env` > shell environment > defaults above.
+ *
+ * EXPORTS: findEnvFile(), loadDotEnv(), fingerprint(), normalizeModel(),
+ * loadConfig().
+ */
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -13,7 +55,7 @@ const PROJECT_ROOT = path.resolve(import.meta.dirname, '..');
  */
 export function findEnvFile(startDir = PROJECT_ROOT) {
   let dir = path.resolve(startDir);
-  for (;;) {
+  for (; ;) {
     const candidate = path.join(dir, '.env');
     if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
     const parent = path.dirname(dir);

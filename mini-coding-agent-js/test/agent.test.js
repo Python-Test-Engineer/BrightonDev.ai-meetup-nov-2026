@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runTask } from '../src/agent.js';
+import { runTask, sandboxScorecard, DEMO_SCRIPT } from '../src/agent.js';
 import { Workspace } from '../src/workspace.js';
 
 const quiet = () => {};
@@ -106,4 +106,29 @@ test('a slow model call says it is still working instead of looking hung', async
     lines.some((line) => /still waiting for the model \(\d+s\)/.test(line)),
     `expected a heartbeat line, got: ${lines.join(' | ')}`,
   );
+});
+
+test('the scripted demo tries every sandbox guard, and every guard holds', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-demo-'));
+  const workspace = new Workspace(root);
+
+  let i = 0;
+  const demoChat = async () => {
+    const message = DEMO_SCRIPT[Math.min(i, DEMO_SCRIPT.length - 1)];
+    i += 1;
+    return { choices: [{ finish_reason: message.tool_calls ? 'tool_calls' : 'stop', message }] };
+  };
+
+  const result = await runTask({
+    task: 'demo', workspace, commandPolicy: 'allow', maxSteps: DEMO_SCRIPT.length + 1, chatFn: demoChat, log: quiet,
+  });
+
+  assert.equal(result.ok, true, 'the demo should end on a final answer');
+  const { rows, passed, total } = sandboxScorecard(result.messages);
+  assert.deepEqual(rows.filter((r) => !r.ok).map((r) => `${r.label} (saw: ${r.seen})`), []);
+  assert.equal(passed, total);
+
+  // The escape attempt must not have written anything outside the workspace.
+  assert.ok(!fs.existsSync(path.join(root, '..', 'escape.txt')));
+  assert.ok(fs.existsSync(path.join(root, 'demo', 'hello.js')));
 });

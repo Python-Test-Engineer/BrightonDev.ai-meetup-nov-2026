@@ -1,11 +1,11 @@
-# mini-coding-agent
+# mini-coding-js
 
 A coding agent in plain Node, built to show what an agent actually is: **an LLM in
 a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
 draws the coloured output.
 
-The loop itself is one ~300-line file (`src/agent.js`); tools, sandbox, config and
-the console theme bring `src/` to ~890 lines. Small enough to read on a projector
+The loop itself is one ~410-line file (`src/agent.js`); tools, sandbox, config and
+the console theme bring `src/` to ~1200 lines. Small enough to read on a projector
 during a talk.
 
 ```
@@ -24,22 +24,52 @@ during a talk.
 ## Quickstart
 
 ```bash
-cd mini-coding-agent
+cd mini-coding-js
 npm install                 # one dependency: chalk (coloured output)
 
 # Option A: reuse the .env already at the repo root - it is found automatically.
-# Option B: create one next to this package:
-cp .env.example .env        # then add your OpenRouter key
+# Option B: create one at the repo root (or next to this package):
+cp ../.env.example ../.env   # then add your OpenRouter key
 
 npm start                  # then type the task at the "task ›" prompt
 ```
 
+## Configuration at a glance
+
+Everything is one env var, or a flag that overrides it. Vars are read from the
+nearest `.env` — this package first, then up the tree to the repo root — and
+anything `.env` does not define comes from your shell. **`.env` beats the shell**
+on purpose (a stale key exported in `~/.bashrc` would otherwise win), and a CLI
+flag beats both.
+
+| Env var | Default | What it does |
+|---|---|---|
+| `OPENROUTER_API_KEY` (alias `OPENROUTER_KEY`) | none — required unless `--demo` | the OpenRouter key; never logged, only fingerprinted |
+| `OPENROUTER_MODEL` (alias `MODEL`) | `deepseek/deepseek-v4.1-flash-1017` | model slug; bare names like `gpt-5` are expanded to `vendor/model` |
+| `OPENROUTER_PROVIDER_PREFIX` | unset | only to force the vendor when the bare-name guess is wrong |
+| `CMD_POLICY` | `ask` | `allow` runs shell commands freely, `ask` prompts first, `deny` refuses them |
+| `MAX_STEPS` | `12` | ReAct iterations before the loop stops and summarises |
+| `REQUEST_TIMEOUT_MS` | `90000` | per model call, so a stalled request fails instead of hanging |
+| `WORKSPACE_DIR` | `workspace` | the only folder the file tools may read and write |
+
+| Flag | Overrides |
+|---|---|
+| `--model anthropic/claude-sonnet-4.5` | `OPENROUTER_MODEL` |
+| `--max-steps 6` | `MAX_STEPS` |
+| `--yes` / `-y` / `--allow-commands` | `CMD_POLICY=allow` |
+| `--demo` | nothing — scripted run, no network, no key needed |
+
+`src/config.js` resolves all of this and the startup banner prints what won and
+where it came from; the details, banner example and alias rules are in
+[Configuration and precedence](#configuration-and-precedence) below.
+
 Anything that stops a run early - no task, a missing key, a failed request, the
 step limit - is printed in red and sets a non-zero exit code (0 done, 1 request
-failed, 2 no task, 3 step limit). While a model call is in flight the console
-prints `… still waiting for the model (5s)` every five seconds and the request is
-capped at `REQUEST_TIMEOUT_MS` (90s), so a slow provider never looks like a
-frozen program.
+failed, 2 no task, 3 step limit). The last line of a failed run spells out what
+that code means instead of leaving a bare number on screen. While a model call is
+in flight the console prints `… still waiting for the model (5s)` every five
+seconds and the request is capped at `REQUEST_TIMEOUT_MS` (90s), so a slow
+provider never looks like a frozen program.
 
 With no task on the command line the agent takes it from an input field. A blank
 line re-asks, Ctrl-C quits, and piped stdin cannot answer it (there is no
@@ -55,13 +85,13 @@ and `node:test` do the rest.
 
 ```bash
 node src/agent.js                             live model, task typed at the prompt
-node src/agent.js --demo                      # scripted run, no network, no key
+node src/agent.js --demo                      # scripted run: the loop AND the sandbox guards
 node src/agent.js "task" --yes                # auto-approve commands
 node src/agent.js "task" --allow-commands     # same thing, as a flag
 node src/agent.js "task" --max-steps 6        # tighter loop
 node src/agent.js "task" --model anthropic/claude-sonnet-4.5
 node src/agent.js --help                      # usage summary
-npm test                                      # 40 offline tests
+npm test                                      # 45 offline tests
 ```
 
 `--model` beats `.env`, which beats your shell (next section). A bare model name
@@ -69,7 +99,7 @@ npm test                                      # 40 offline tests
 
 ## Configuration and precedence
 
-`src/config.js` looks for `.env` in `mini-coding-agent/` first, then walks **up** the
+`src/config.js` looks for `.env` in `mini-coding-js/` first, then walks **up** the
 directory tree, so the single `.env` at the repository root is picked up too. The
 nearest `.env` wins; the path actually used is printed on the startup banner as
 `env file : ...`, with `(missing)` appended when nothing was found.
@@ -79,25 +109,17 @@ purpose: a stale `OPENROUTER_API_KEY` in `~/.bashrc` would otherwise silently wi
 over the key you just wrote to `.env`. Variables `.env` does not mention still come
 from the environment, and `--model` beats both.
 
-| Variable | Default |
-|---|---|
-| `OPENROUTER_API_KEY` (or `OPENROUTER_KEY`) | required (live mode) |
-| `OPENROUTER_MODEL` or `MODEL` | `deepseek/deepseek-v4.1-flash-1017` |
-| `CMD_POLICY` | `ask` (`allow` / `ask` / `deny`) |
-| `MAX_STEPS` | `12` |
-| `REQUEST_TIMEOUT_MS` | `90000` - a stalled call stops instead of hanging |
-| `WORKSPACE_DIR` | `workspace` |
-| `OPENROUTER_PROVIDER_PREFIX` | unset - only used to force a vendor prefix |
-
-`MODEL=` is accepted as an alias for `OPENROUTER_MODEL=` (older `.env` files in this
-repo use that name); tell-me-what-won precedence is printed on every start.
+The full list of variables and defaults is the table in
+[Configuration at a glance](#configuration-at-a-glance) above. Two aliases are
+worth repeating: `MODEL=` for `OPENROUTER_MODEL=` (older `.env` files in this repo
+use that name) and `OPENROUTER_KEY=` for `OPENROUTER_API_KEY=`.
 
 The startup banner shows both the value and where it came from, and says
 `overrode the shell value` when your exported variable differed:
 
 ```
-min-coding-agent
-workspace : ...\mini-coding-agent\workspace
+min-coding-js
+workspace : ...\mini-coding-js\workspace
 model     : deepseek/deepseek-v4.1-flash-1017 (from .env, overrode the shell value)
 key       : sk-or...aaa5 (73 chars) from .env
 env file  : ...\BrightonDev.ai-meetup-nov-2026\.env
@@ -116,13 +138,13 @@ vendor with `OPENROUTER_PROVIDER_PREFIX=...` if the guess is wrong.
 
 | File | Lines | What it shows |
 |---|---|---|
-| `src/agent.js` | ~300 | the ReAct loop, system prompt, CLI, input field, heartbeat, scripted demo fallback |
-| `src/tools.js` | ~320 | tool schemas the model reads + the dispatcher that runs them |
-| `src/config.js` | ~130 | `.env` discovery and loading, model + policy config |
+| `src/agent.js` | ~410 | the ReAct loop, system prompt, CLI, input field, heartbeat, scripted demo + sandbox scorecard |
+| `src/tools.js` | ~350 | tool schemas the model reads + the dispatcher, the deny-list and the env allow-list |
+| `src/config.js` | ~170 | `.env` discovery and loading, model + policy config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
-| `src/ui.js` | ~55 | the console palette: `chalk` calls, one helper per kind of line |
+| `src/ui.js` | ~110 | the console palette, plus the plain-English meaning of each exit code |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
-| `test/` | ~540 | offline tests for the loop, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
+| `test/` | ~610 | offline tests for the loop, the demo's sandbox checks, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
 
 ## Coloured output
@@ -144,6 +166,9 @@ think: (text) => `${chalk.cyan('think:')} ${text}`
 | `think:` | cyan |
 | `tool →` name and arguments | yellow / white |
 | `result ←` | green, or red when the tool returned `ERROR`/`DENIED`/non-zero exit |
+| `↳ stdout: ...` under `exit code 0` | dim - the first line the command printed |
+| `↳ exit N: ...` under a failure | dim - what that exit code means in English |
+| sandbox scorecard (`✓` / `✗`, `── sandbox checks ──`) | green / red checks, magenta heading |
 | final answer heading | bold green |
 | warnings | bright yellow |
 | failures | red |
@@ -164,7 +189,7 @@ redirecting a run to a file gives clean text.
 | `create_file` | **fails** if the file exists - forces the model to edit, not clobber |
 | `write_file` | create or overwrite a whole file |
 | `edit_file` | exact-snippet replace; 0 matches = error, >1 = error unless `replace_all` |
-| `run_command` | shell in the workspace root, 30 s timeout, returns `exit code N` + streams |
+| `run_command` | shell in the workspace root, 30 s timeout, output capped at 6000 chars, `env` allow-listed, returns `exit code N` + streams |
 
 ## The AI principles it demonstrates
 
@@ -179,13 +204,17 @@ redirecting a run to a file gives clean text.
    `ERROR: old_string not found...` and the model corrects itself on the next
    step. Tool exceptions are caught in `runTool` and returned as text.
 5. **Exit codes close the loop.** `run_command` reports `exit code 0` vs `1`,
-   which is how the agent knows whether its code actually worked.
+   which is how the agent knows whether its code actually worked. Every non-zero
+   code is printed with what it means (`127` = not on PATH, `137` = killed,
+   `9009` = Windows "not recognised as a program"), so the audience is never left
+   decoding a number.
 6. **Human in the loop.** `CMD_POLICY=ask` (default) stops before every command;
    hard-deny patterns (`rm -rf /`, `del /s`, `format`, `shutdown`,
    `git push --force`, `curl | sh`, fork bombs) never run, whatever the policy says.
 7. **Least privilege.** File tools are confined to `workspace/`; absolute paths,
    `..`, `~`, `%VAR%`, UNC paths and home/system folder names are refused before
-   any `mkdir` happens.
+   any `mkdir` happens. The child process gets a 13-name env allow-list rather than
+   `process.env`, so a command cannot echo `OPENROUTER_API_KEY` into the transcript.
 8. **Bounded autonomy.** `maxSteps` caps the loop; a truncated reply
    (`finish_reason: "length"`) is never dispatched as half a tool call - the model
    is told to continue with smaller calls instead.
@@ -208,11 +237,17 @@ redirecting a run to a file gives clean text.
 node src/agent.js --demo
 ```
 
-Narrate each line as it prints: *think → tool → result → think*. Then delete
-`workspace/demo/hello.js`, run it live with `--yes`, and finish by asking the agent
-to do something it will fail at first (e.g. "edit hello.js to use a variable called
-`msg`") so the audience sees the error come back as a tool result and the model fix
-it on the next iteration.
+Narrate each line as it prints: *think → tool → result → think*. Then the demo
+turns on the sandbox: a `../escape.txt` write and a `~/.ssh/id_rsa` read are
+refused, `git push --force` is denied, a child process is asked for the API key and
+finds nothing, and a failing command comes back as `exit code 1` with its meaning
+spelled out. The run ends with a `sandbox checks` scorecard built from those same
+tool results - and the process exits non-zero if any check regressed.
+
+Then delete `workspace/demo/hello.js`, run it live with `--yes`, and finish by
+asking the agent to do something it will fail at first (e.g. "edit hello.js to use
+a variable called `msg`") so the audience sees the error come back as a tool result
+and the model fix it on the next iteration.
 
 ## Tests
 
@@ -220,7 +255,8 @@ it on the next iteration.
 npm test        # node --test: offline, no key, no network
 ```
 
-40 tests cover the loop (including truncation and the max-steps stop), `.env`
-discovery and precedence, every tool's failure modes, the path resolver's escape
-attempts, the palette (tag escaping, backslashes, red results) and the input field
+45 tests cover the loop (including truncation and the max-steps stop), the scripted
+demo's sandbox checks, `.env` discovery and precedence, every tool's failure modes,
+the child-process env allow-list, the path resolver's escape attempts, the palette
+(tag escaping, backslashes, red results, exit-code explanations) and the input field
 (trimming, blank-line re-prompt, closed input).

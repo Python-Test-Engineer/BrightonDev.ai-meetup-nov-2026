@@ -23,7 +23,7 @@ export async function chat({ apiKey, model, messages, tools, signal, timeoutMs =
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'X-Title': 'min-coding-agent',
+        'X-Title': 'min-coding-js',
       },
       body: JSON.stringify({ model, messages, tools, max_tokens: 2048 }),
     });

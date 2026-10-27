@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Workspace } from '../src/workspace.js';
-import { runTool } from '../src/tools.js';
+import { runTool, safeEnv } from '../src/tools.js';
 
 function ctx(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-tools-'));
@@ -106,6 +106,36 @@ test('file tools cannot be talked out of the workspace', async () => {
   assert.match(await runTool('write_file', { path: '../escape.txt', content: 'x' }, c), /^ERROR: path escapes the workspace/);
   assert.match(await runTool('read_file', { path: 'C:\\Windows\\win.ini' }, c), /^ERROR: absolute/);
   assert.ok(!fs.existsSync(path.join(c.root, '..', 'escape.txt')));
+});
+
+test('the child process gets an allow-list, not the harness environment', async () => {
+  const c = ctx();
+  process.env.SECRET_CANARY = 'leak-me';
+  process.env.OPENROUTER_API_KEY = 'sk-or-v1-not-for-the-child';
+
+  try {
+    const out = await runTool('run_command', {
+      command: 'node -e "console.log(\'CANARY=\' + (process.env.SECRET_CANARY ?? \'absent\') + \' KEY=\' + (process.env.OPENROUTER_API_KEY ?? \'absent\'))"',
+    }, c);
+    assert.match(out, /^exit code 0/);
+    assert.match(out, /CANARY=absent/);
+    assert.match(out, /KEY=absent/);
+    assert.doesNotMatch(out, /leak-me|not-for-the-child/);
+
+    // PATH survives, or nothing could run at all.
+    const pathProbe = await runTool('run_command', {
+      command: 'node -e "console.log(process.env.PATH ? \'PATH=present\' : \'PATH=absent\')"',
+    }, c);
+    assert.match(pathProbe, /PATH=present/);
+  } finally {
+    delete process.env.SECRET_CANARY;
+    delete process.env.OPENROUTER_API_KEY;
+  }
+});
+
+test('safeEnv keeps only the allow-listed names', () => {
+  const env = safeEnv({ PATH: '/bin', OPENROUTER_API_KEY: 'nope', HOME: '/home/x', RANDOM_THING: '1' });
+  assert.deepEqual(env, { PATH: '/bin', HOME: '/home/x' });
 });
 
 test('bad arguments come back as text, not crashes', async () => {

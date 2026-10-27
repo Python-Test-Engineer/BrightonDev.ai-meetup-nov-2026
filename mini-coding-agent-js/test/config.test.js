@@ -66,7 +66,7 @@ test('quotes, export prefixes and blank values are handled', () => {
 
 test('config finds the .env in the project root when the package has none', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-root-'));
-  const nested = path.join(root, 'mini-coding-agent', 'src');
+  const nested = path.join(root, 'mini-coding-js', 'src');
   fs.mkdirSync(nested, { recursive: true });
   const rootEnv = path.join(root, '.env');
   fs.writeFileSync(rootEnv, 'OPENROUTER_API_KEY=root-key\nMODEL=deepseek/deepseek-chat\n', 'utf8');
@@ -90,7 +90,7 @@ test('config finds the .env in the project root when the package has none', () =
 
 test('a nearer .env wins over one further up', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-near-'));
-  const pkg = path.join(root, 'mini-coding-agent');
+  const pkg = path.join(root, 'mini-coding-js');
   fs.mkdirSync(pkg, { recursive: true });
   fs.writeFileSync(path.join(root, '.env'), 'OPENROUTER_API_KEY=outer-key\n', 'utf8');
   fs.writeFileSync(path.join(pkg, '.env'), 'OPENROUTER_API_KEY=inner-key\n', 'utf8');
