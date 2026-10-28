@@ -104,8 +104,8 @@ function usage() {
   console.log(`
 ${ui.title('min-coding-js')} ${ui.dim('- a small coding agent in Node')}
 
-  node src/cli.js                          live model, type the task in the prompt
-  node src/cli.js "task for the agent"     same, task given up front
+  node src/cli.js                          interactive session: task, then another
+  node src/cli.js "task for the agent"     one shot: run that task and exit
   node src/cli.js --demo                   scripted run, no network: the loop AND the sandbox guards
   node src/cli.js "..." --yes              auto-approve commands
   node src/cli.js "..." --allow-commands   same, from a flag
@@ -120,8 +120,11 @@ ${ui.warn('Env: OPENROUTER_API_KEY, OPENROUTER_MODEL, CMD_POLICY=allow|ask|deny,
 ${ui.warn('     MEMORY_FILE=src/memory.md, MEMORY_MAX_ENTRIES=60, MEMORY_PROMPT_CHARS=1200')}
 Files are confined to ./workspace; long-term memory lives in ./src/memory.md. Run "npm test" for the offline test suite.
 
+In a session: type a task, watch it finish, type the next one. Every task starts
+again at step 1 and keeps the conversation; /new clears the conversation, /quit exits.
+
 Exit codes:
-  0  finished - the model gave a final answer
+  0  finished - the model gave a final answer (or the session ended)
   1  the run did not finish: a model request failed (no network, timeout, bad key,
      unknown model slug) or a fatal error was thrown. The red line above says which.
   2  no task: none was given as an argument and stdin is not a terminal, so the
@@ -202,6 +205,113 @@ function banner({ config, workspace, memory, commandPolicy, opts }) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Sessions: one task, then another, without leaving the program.
+ *
+ * A task is one `runTask` call, and every call starts at step 1 - so the
+ * budget resets by construction rather than by bookkeeping. What we carry
+ * between tasks is the CONVERSATION, so "now add tests" still knows what was
+ * just built. The system prompt is not carried: it is rebuilt inside runTask,
+ * which means a memory the last task saved is already in front of the model.
+ * ------------------------------------------------------------------ */
+
+/** How much of the previous task's conversation follows into the next one. */
+export const MAX_HISTORY = 24;
+
+/** `/quit` and `/new` are the whole command vocabulary; anything else is a task. */
+export function interpretCommand(line) {
+  const cmd = String(line ?? '').trim().toLowerCase();
+  if (cmd === '/quit' || cmd === '/exit') return 'quit';
+  if (cmd === '/new') return 'new';
+  return 'task';
+}
+
+/**
+ * Keep the tail of a conversation, without breaking a tool call.
+ *
+ * A provider rejects a request whose history starts with a `tool` result (no
+ * `tool_calls` to answer) or ends with an assistant `tool_calls` and no result,
+ * so the cut always lands on a `user` message - the only safe boundary.
+ *
+ * @param {object[]} messages a finished run's messages (system included)
+ * @param {number} [max] how many messages to keep at most
+ * @returns {object[]} the conversation to carry into the next task
+ */
+export function trimHistory(messages, max = MAX_HISTORY) {
+  const kept = (messages ?? []).filter((m) => m.role !== 'system');
+  let start = Math.max(0, kept.length - Math.max(0, max));
+  while (start < kept.length && kept[start].role !== 'user') start += 1;
+  return start >= kept.length ? [] : kept.slice(start);
+}
+
+/** The exit code a single task would have produced, used for the session summary. */
+function taskExitCode(result) {
+  if (!result.ok && result.reason === 'request_failed') return 1;
+  if (!result.ok && result.reason === 'max_steps') return 3;
+  return 0;
+}
+
+/** One line after each task: what happened, and what to type next. */
+function announce(result, carriedMessages) {
+  const code = taskExitCode(result);
+  const label = result.ok
+    ? `answer in ${result.steps} step(s)`
+    : `stopped (${result.reason ?? 'unknown'})`;
+  const note = code === 0
+    ? `${carriedMessages} message(s) carried into the next task`
+    : result.reason === 'max_steps'
+      ? 'raise it with --max-steps N, or /new for a fresh conversation'
+      : 'check the red line above - the session is still alive, so you can try again';
+
+  console.log('');
+  console.log(ui.rule('task finished'));
+  console.log(`  ${code === 0 ? ui.pass(label) : ui.fail(label)} ${ui.dim(`- ${note}`)}`);
+  console.log(ui.dim('  type another task, /new to clear the conversation, /quit to exit'));
+  console.log('');
+}
+
+/**
+ * Read a task, run it, keep the conversation, ask again. Ends on /quit, Ctrl-C
+ * or end of input. Returns when the session is over; exit code 0 unless the
+ * whole session was impossible to start (handled by the caller).
+ *
+ * @param {{base: object, opts: object}} args  `base` is everything runTask needs
+ *   except the task itself; `opts` is the parsed command line.
+ */
+export async function runSession({ base, opts }) {
+  console.log(ui.dim('\n  interactive session - type a task below (/new clears, /quit exits)\n'));
+
+  let history = [];
+  let tasks = 0;
+
+  for (;;) {
+    const line = await askTask();
+    if (line === null) break;                       // Ctrl-C or end of input
+
+    const command = interpretCommand(line);
+    if (command === 'quit') break;
+    if (command === 'new') {
+      history = [];
+      console.log(ui.dim('  new conversation - the workspace and memory.md are untouched\n'));
+      continue;
+    }
+
+    tasks += 1;
+    console.log(ui.note(`\ntask      : ${line}\n`));
+
+    // Every task gets the same budget, the same hooks, the same sandbox - and
+    // the conversation so far. The step counter starts at 1 inside runTask.
+    const result = await runTask({ ...base, task: line, history });
+
+    history = trimHistory(result.messages);
+    if (opts.demo) reportSandbox(result.messages);
+
+    announce(result, history.length);
+  }
+
+  console.log(ui.dim(`\n  session over - ${tasks} task(s) run. The workspace and src/memory.md keep everything.`));
+}
+
+/* ------------------------------------------------------------------ *
  * The run
  * ------------------------------------------------------------------ */
 async function runCli() {
@@ -242,26 +352,11 @@ async function runCli() {
     return;
   }
 
-  let task = opts.task || (opts.demo ? DEMO_TASK : '');
-
-  if (!task) {
-    // Constraint: an input field needs a terminal - a pipe can never answer it.
-    if (!process.stdin.isTTY) {
-      console.log(ui.error('stopped: cannot ask for a task because stdin is not a terminal.'));
-      console.log(ui.dim('  pass it as an argument instead: node src/cli.js "create hello.js and run it"'));
-      process.exitCode = 2;
-      return;
-    }
-    console.log(ui.dim('\n  no task on the command line - type one below (Ctrl-C to quit)\n'));
-    task = await askTask();
-    if (!task) {
-      console.log(ui.error('\nstopped: no task given (nothing entered, or the input closed)'));
-      process.exitCode = 2;
-      return;
-    }
-  }
-
-  console.log(ui.note(`\ntask      : ${task}\n`));
+  // A task on the command line (or --demo) means one shot; no task means a
+  // session. The hooks are wired first either way, so the trace intro prints
+  // once, before the first task of the session.
+  const singleTask = opts.task || (opts.demo ? DEMO_TASK : '');
+  if (singleTask) console.log(ui.note(`\ntask      : ${singleTask}\n`));
 
   // The lifecycle trace is ON by default: every demo and every live run prints
   // its nine moments as `[HOOK:Name] what this moment is for`, which is the
@@ -274,9 +369,10 @@ async function runCli() {
     console.log(ui.dim('  (--no-hooks hides these; --hooks explains them)\n'));
   }
 
-  // Everything above was configuration. This is the agent.
-  const result = await runTask({
-    task,
+  // Everything runTask needs except the task itself: one sandbox, one policy,
+  // one memory store, one chatFn, one set of hooks - reused by every task, so a
+  // session pays for the banner and the config once.
+  const base = {
     workspace,
     commandPolicy,
     maxSteps: opts.maxSteps ?? (opts.demo ? DEMO_SCRIPT.length + 1 : config.maxSteps),
@@ -284,13 +380,29 @@ async function runCli() {
     confirm: makeConfirm(),
     hooks,
     memory: opts.noMemory ? null : memory,
-  });
+  };
 
-  if (!result.ok && result.reason === 'request_failed') process.exitCode = 1;
-  if (!result.ok && result.reason === 'max_steps') process.exitCode = 3;
+  // One shot: run the one task, turn the result into an exit code, leave.
+  if (singleTask) {
+    const result = await runTask({ ...base, task: singleTask });
+    process.exitCode = taskExitCode(result);
+    // The demo claims the guards hold, so check them against what actually ran.
+    if (opts.demo) reportSandbox(result.messages);
+    return;
+  }
 
-  // The demo claims the guards hold, so check them against what actually ran.
-  if (opts.demo) reportSandbox(result.messages);
+  // No task and no terminal: nothing can answer the prompt. A constraint of the
+  // input field, not a failure of the agent - hence exit code 2.
+  if (!process.stdin.isTTY) {
+    console.log(ui.error('stopped: cannot ask for a task because stdin is not a terminal.'));
+    console.log(ui.dim('  pass it as an argument instead: node src/cli.js "create hello.js and run it"'));
+    process.exitCode = 2;
+    return;
+  }
+
+  // Otherwise: a session. Task, answer, task again - each one a fresh runTask,
+  // so each one gets its own step budget, and the conversation is carried over.
+  await runSession({ base, opts });
 }
 
 /** Print which sandbox guards the demo exercised, and whether each one held. */

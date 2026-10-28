@@ -4,10 +4,10 @@ A coding agent in plain Node, built to show what an agent actually is: **an LLM 
 a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
 draws the coloured output.
 
-The loop itself is one ~200-line file (`src/agent.js`), of which ~120 lines are code:
+The loop itself is one ~205-line file (`src/agent.js`), of which ~120 lines are code:
 no flags, no colours, no banner. Everything else - tools, the system prompt, the
 sandbox, config, the console palette, lifecycle hooks, long-term memory, the scripted
-demo and the CLI - is its own module, and `src/` comes to ~2370 lines. Small enough
+demo and the CLI - is its own module, and `src/` comes to ~2490 lines. Small enough
 to read on a projector, and split so that the file to teach from never grows.
 
 ```
@@ -33,7 +33,55 @@ npm install                 # one dependency: chalk (coloured output)
 # Option B: create one at the repo root (or next to this package):
 cp ../.env.example ../.env   # then add your OpenRouter key
 
-npm start                  # then type the task at the "task ›" prompt
+npm start                  # a session: type a task at the "task ›" prompt, then another
+```
+
+## Sessions: one task after another
+
+`npm start` with no task opens a prompt and *stays open*. A session is the same loop
+you have been reading about, called once per task:
+
+```
+  interactive session - type a task below (/new clears, /quit exits)
+
+  task › add a hello.js that prints the date
+── step 1/12 ────────────────────────────────────────
+...
+── final answer ──────────────────────────────────────
+Created hello.js and ran it: exit code 0.
+
+── task finished ────────────────────────────────────────────
+  ✓ answer in 4 step(s) - 9 message(s) carried into the next task
+  type another task, /new to clear the conversation, /quit to exit
+
+  task ›
+```
+
+Four things make that work, and none of them is a new mechanism in the loop:
+
+- **The step budget resets by construction.** A task is one `runTask` call, and every
+  call starts its `for` at step 1 - so "step 4/12" in the second task is step 4 of
+  *that* task, not a running total. `maxSteps` is per task, not per session.
+- **The conversation is carried, the system prompt is not.** The CLI keeps the last
+  24 messages (`MAX_HISTORY`) and passes them as `history`, so a follow-up like "now
+  add tests" knows what was just built. The system message is rebuilt every task, which
+  means a memory the last task saved is already in front of the model.
+- **History is cut on a `user` turn.** Providers reject a request that starts with a
+  `tool` result or ends with an unanswered `tool_calls`, so `trimHistory()` walks
+  forward to the nearest user message instead of slicing blindly.
+- **`/new` clears the conversation, not the workspace.** Files stay, `src/memory.md`
+  stays - the session forgets, the project does not. `/quit` or Ctrl-C ends the
+  session; a session exits 0 even if an individual task failed (the failure is printed,
+  and you can simply try again).
+
+The loop only gained one thing: `runTask({ history })`.
+
+```js
+const messages = [
+  { role: 'system', content: buildSystemPrompt({ memory, log }) },   // rebuilt
+  ...history.filter((m) => m.role !== 'system'),                     // last task's turns
+  { role: 'user', content: task },
+];
 ```
 
 ## Configuration at a glance
@@ -73,18 +121,21 @@ flag beats both.
 where it came from; the details, banner example and alias rules are in
 [Configuration and precedence](#configuration-and-precedence) below.
 
-Anything that stops a run early - no task, a missing key, a failed request, the
-step limit - is printed in red and sets a non-zero exit code (0 done, 1 request
-failed, 2 no task, 3 step limit). The last line of a failed run spells out what
-that code means instead of leaving a bare number on screen. While a model call is
+Anything that stops a one-shot run early - no task on a non-TTY, a missing key, a
+failed request, the step limit - is printed in red and sets a non-zero exit code
+(0 done, 1 request failed, 2 no task, 3 step limit), and the last line of a failed run
+spells out what that code means instead of leaving a bare number on screen. In a
+session nothing ends the process: a failed task is reported, the prompt comes back,
+and the session itself exits 0. While a model call is
 in flight the console prints `… still waiting for the model (5s)` every five
 seconds and the request is capped at `REQUEST_TIMEOUT_MS` (90s), so a slow
 provider never looks like a frozen program.
 
-With no task on the command line the agent takes it from an input field. A blank
-line re-asks, Ctrl-C quits, and piped stdin cannot answer it (there is no
-terminal), so that path stops in red instead of hanging. For scripts, pass the
-task as an argument:
+With no task on the command line the agent starts a **session** and keeps asking for
+work: task, answer, task again, until you type `/quit` (next section). A task passed
+as an argument is one shot - run it, set the exit code, leave - which is what scripts
+and CI want. Piped stdin cannot answer the prompt (there is no terminal), so that path
+stops in red instead of hanging.
 
 ```bash
 npm start -- "create hello.js that prints today's date and time, run it, and save its output to hello-output.txt"
@@ -94,7 +145,7 @@ Nothing else to install: Node 20+ and its built-in `fetch`, `node:child_process`
 and `node:test` do the rest.
 
 ```bash
-node src/cli.js                             live model, task typed at the prompt
+node src/cli.js                             an interactive session: task, then another
 node src/cli.js --demo                      # scripted run: the loop AND the sandbox guards
 node src/cli.js "task" --yes                # auto-approve commands
 node src/cli.js "task" --allow-commands     # same thing, as a flag
@@ -105,7 +156,7 @@ node src/cli.js "task" --no-hooks           # silence the [HOOK:...] trace lines
 node src/cli.js --memory                    # the memory store, and exactly what it injects
 node src/cli.js "task" --no-memory          # one run with nothing remembered
 node src/cli.js --help                      # usage summary
-npm test                                      # 84 offline tests
+npm test                                      # 89 offline tests
 ```
 
 `--model` beats `.env`, which beats your shell (next section). A bare model name
@@ -156,19 +207,19 @@ then the extension points, then the program that runs it.
 
 | File | Lines | What it shows |
 |---|---|---|
-| `src/agent.js` | ~200 | **the loop** - `runTask`: seven beats, nine hook call sites, one `for`. Nothing else. |
+| `src/agent.js` | ~205 | **the loop** - `runTask`: seven beats, nine hook call sites, one `for`. Nothing else. |
 | `src/prompt.js` | ~80 | the system prompt: the standing rules, plus the memory block assembled at run time |
 | `src/heartbeat.js` | ~35 | liveness: print "still waiting" every 5 s so a slow call never looks frozen |
 | `src/tools.js` | ~415 | tool schemas the model reads + the dispatcher, the deny-list and the env allow-list |
 | `src/hooks.js` | ~400 | the lifecycle: nine named moments, the registry, the `--hooks` catalogue and the live trace |
 | `src/memory.js` | ~250 | long-term memory: `memory.md` as the store, the bounded digest, search, dedupe and caps |
 | `src/demo.js` | ~140 | the scripted model for `--demo`, and the scorecard that checks the sandbox guards held |
-| `src/cli.js` | ~350 | **the program** - flags, banner, input field, y/N confirm, `--hooks`/`--memory`, exit codes |
+| `src/cli.js` | ~460 | **the program** - flags, banner, the session loop, y/N confirm, `--hooks`/`--memory`, exit codes |
 | `src/config.js` | ~195 | `.env` discovery and loading, model + policy + memory config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
 | `src/ui.js` | ~150 | the console palette (including every hook colour), plus the plain-English meaning of each exit code |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
-| `test/` | ~1290 | offline tests for the loop, the prompt, the hooks, the demo's sandbox checks, the config, the tools, memory, the palette, the input field, the HTTP timeout and the path resolver |
+| `test/` | ~1370 | offline tests for the loop, the prompt, sessions, the hooks, the demo's sandbox checks, the config, the tools, memory, the palette, the input field, the HTTP timeout and the path resolver |
 | `src/memory.md` | - | the long-term memory store: markdown, one bullet per memory, readable and editable by hand |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
 
@@ -499,9 +550,10 @@ transcript like everything else.
 - `run_command` is a real shell: it starts in `workspace/` but a command can walk
   out of that folder. The directory is not an OS sandbox - use a container if you
   need actual isolation.
-- No context management: long runs will eventually exceed the model's window
-  (each request is capped at `max_tokens: 2048`). The memory digest is bounded, but
-  the `messages` array is not.
+- No context management: a session carries only the last 24 messages, and the cut is
+  positional (it lands on a user turn) rather than a summary. Long runs still grow
+  until they hit that cap, and nothing is compacted or retrieved - the memory digest is
+  bounded, the conversation is only truncated.
 - No streaming, no sub-agents, no retries, no skills - all of those are layers on
   top of this loop, not replacements for it. `src/hooks.js` is the one extension
   point that IS here, and it is deliberately small: nine events, no configuration
@@ -548,13 +600,15 @@ because the `remember` call from the previous run outlived the process.
 npm test        # node --test: offline, no key, no network
 ```
 
-84 tests cover the loop (including truncation and the max-steps stop), the lifecycle
+89 tests cover the loop (including truncation and the max-steps stop), the lifecycle
 hooks (every event documented, blocking, replacing, a throwing hook, the order a run
 fires them in), the scripted demo's sandbox checks, `.env` discovery and precedence,
 every tool's failure modes, the child-process env allow-list, the path resolver's
 escape attempts, the palette (tag escaping, backslashes, red results, exit-code
 explanations, the hook colours) and the input field (trimming, blank-line re-prompt,
-closed input) - and long-term memory: a note surviving a second process, dedupe with a
+closed input), sessions (commands, the history trim landing on a user turn, a follow-up
+seeing the earlier task but a fresh system prompt, the step budget restarting) - and
+long-term memory: a note surviving a second process, dedupe with a
 refreshed date, the entry cap dropping the oldest, per-entry truncation, the digest
 staying inside its character budget and saying what it hid, injection disabled by
 `MEMORY_PROMPT_CHARS=0`, AND-search ordering, `forget`, hand-edited bullet parsing, an

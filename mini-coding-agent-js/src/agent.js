@@ -52,6 +52,8 @@ import { pathToFileURL } from 'node:url';
  * @param {(command: string) => Promise<'allow'|'deny'>} [options.confirm]
  * @param {Hooks|null} [options.hooks]      the lifecycle (hooks.js)
  * @param {Memory|null} [options.memory]    long-term memory (memory.js)
+ * @param {object[]} [options.history]      messages from the previous task, when
+ *                                          this is a follow-up in a session
  * @param {(line: string) => void} [options.log]  where the run narrates itself
  * @param {number} [options.heartbeatMs]    how often to say "still waiting"
  * @returns {Promise<{ok: boolean, reason?: string, answer?: string,
@@ -59,18 +61,24 @@ import { pathToFileURL } from 'node:url';
  */
 export async function runTask({
   task, workspace, commandPolicy, maxSteps, chatFn, confirm,
-  hooks = null, memory = null, log = console.log, heartbeatMs = 5000,
+  hooks = null, memory = null, history = [], log = console.log, heartbeatMs = 5000,
 }) {
   const started = Date.now();
   const hook = hooks ?? new Hooks();
   const durationMs = () => Date.now() - started;
 
-  // The whole of the agent's state: one array. Memory (memory.js) is pasted into
-  // the first message by prompt.js - there is no second channel.
+  // One task = one run = one step budget: `step` starts at 1 again every call.
+  //
+  // `history` is the PREVIOUS task's messages, which the CLI carries across an
+  // interactive session so a follow-up ("now add tests") still knows what was
+  // just built. The system prompt is deliberately NOT carried: it is rebuilt
+  // here, so a memory written by the last task is already in front of the model.
   const messages = [
     { role: 'system', content: buildSystemPrompt({ memory, log }) },
+    ...history.filter((m) => m.role !== 'system'),
     { role: 'user', content: task },
   ];
+  const taskIndex = messages.length - 1;
 
   // Tools reach the world through this object: the sandbox root, the command
   // policy, the approval callback, and the memory store.
@@ -98,7 +106,7 @@ export async function runTask({
   }
   if (submitted.task !== null) {
     log(ui.dim(`  UserPromptSubmit hook rewrote the task: ${submitted.task}`));
-    messages[1] = { role: 'user', content: submitted.task };
+    messages[taskIndex] = { role: 'user', content: submitted.task };
   }
 
   for (let step = 1; step <= maxSteps; step += 1) {
