@@ -246,13 +246,71 @@ tbody td:first-child{white-space:nowrap}
 }
 
 /* ---------- print ---------- */
+@page{
+  size:A4; margin:17mm 15mm 18mm 15mm;
+  @bottom-center{content:counter(page); font:8.5pt var(--sans); color:#6b675f}
+}
+@page:first{@bottom-center{content:none}}   /* no folio on the title page */
+
 @media print{
+  /* Print is always light and always one column. Three things have to change:
+     the tokens, because the dark block above follows the reader's OS setting
+     and would print cream text on white; the root size, because the screen
+     page is set at 24px/1rem and would print body text at 18pt; and the
+     heading sizes, which are the sizes build_pdf.py reads back to build the
+     PDF outline (30pt title, 19pt chapter, 12.5pt section). */
+  :root{
+    color-scheme:light;
+    --paper:#fff; --surface:#fff; --ivory:#fff;
+    --ink:#1f1e1d; --prose:#33302c; --muted:#44423d; --stone:#6b675f;
+    --line:#d8d3c8; --line-soft:#e8e4da; --tint:#f8f2ec;
+    --terra:#c9633f; --terra-dark:#a14e2f; --amber:#8a6420;
+    --code-bg:#f6f4ef; --code-bar:#efece3; --code-line:#ddd8cc;
+    --code-ink:#26241f; --code-dim:#6b675f; --code-accent:#8f3f27;
+  }
+  html{font-size:13px; background:#fff; scroll-behavior:auto}
+  body{background:#fff; color:var(--prose); font-size:10.5pt; line-height:1.55}
   .sidebar,.progress{display:none}
   .shell{display:block}
   .pane{padding:0}
-  body{background:#fff; font-size:10.5pt}
-  h2{break-after:avoid} figure,table,.callout{break-inside:avoid}
-  figure.code{margin-left:0; margin-right:0}
+  .inner{max-width:none; margin:0}
+
+  /* the title page; every chapter then starts on a fresh sheet */
+  header.page-heading{break-after:page; margin:0; padding-bottom:0; border-bottom:none}
+  section{break-before:page; margin:0}
+  h1{font-size:30pt; line-height:1.12; margin:0 0 .45em; break-after:avoid}
+  h2{font-size:19pt; line-height:1.2; margin:0 0 .5em; break-after:avoid; break-inside:avoid}
+  h2 .num{font-size:9pt}
+  h3{font-size:12.5pt; line-height:1.35; margin:1.3em 0 .35em; break-after:avoid; break-inside:avoid}
+  .page-heading .lede{font-size:10.6pt}
+  p{margin:0 0 .55em}
+  ul,ol{margin:0 0 .75em}
+  li{margin:0 0 .35em}
+
+  /* code on paper: pale block, dark ink, wrapped rather than clipped */
+  figure.code,figure.ascii{margin:0.75em 0; box-shadow:none; border-radius:4pt; overflow:visible}
+  figure.code{background:var(--code-bg); border:0.5pt solid var(--line)}
+  figure.code figcaption{background:var(--code-bar); border-bottom:0.5pt solid var(--line); color:var(--code-accent); font-size:7.4pt}
+  figure.code figcaption .lang{color:var(--code-dim)}
+  figure.code pre{color:var(--code-ink); font-size:7.8pt; line-height:1.45; white-space:pre-wrap; overflow-wrap:break-word}
+  figure.ascii{background:#faf8f3; border:0.5pt solid var(--line)}
+  figure.ascii pre{color:#3d3a33; font-size:7.3pt; line-height:1.4; white-space:pre; overflow:visible}
+  code{background:#f0ede5; color:#6f3b26}
+
+  .table-wrap{overflow:visible}
+  table{font-size:8.5pt; break-inside:avoid}
+  tbody td:first-child{white-space:normal}
+  .callout{font-size:9pt}
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  /* 14pt, not 12pt: 11.5-13.5pt is the size band build_pdf.py reads as a
+     section heading, and these stat numbers would each become a bookmark */
+  .stats b{font-size:14pt}
+  /* Keep the small things whole, but let a long listing split between two
+     pages: a hundred-line figure taller than the space left on the page would
+     otherwise strand that whole page blank. */
+  table,.callout,.stats,figure.ascii,li{break-inside:avoid}
+  figure.code{break-inside:auto}
+  pre{orphans:3; widows:3}
   a{color:inherit; text-decoration:none}
 }
 </style>
