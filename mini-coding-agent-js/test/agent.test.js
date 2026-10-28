@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runTask, sandboxScorecard, DEMO_SCRIPT } from '../src/agent.js';
+import { runTask } from '../src/agent.js';
+import { sandboxScorecard, DEMO_SCRIPT } from '../src/demo.js';
 import { Workspace } from '../src/workspace.js';
 
 const quiet = () => {};

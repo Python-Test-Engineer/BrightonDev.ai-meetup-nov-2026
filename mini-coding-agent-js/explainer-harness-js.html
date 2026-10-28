@@ -346,7 +346,7 @@ tbody td:first-child{white-space:nowrap}
     </nav>
     <div class="side-foot">
       Source: <code>mini-coding-js/</code><br>
-      2147 lines in <code>src/</code> &middot; Node 20+ &middot; one dependency<br>
+      2372 lines in <code>src/</code> &middot; Node 20+ &middot; one dependency<br>
       Chapters 01&ndash;17 follow the files.
     </div>
   </aside>
@@ -356,15 +356,14 @@ tbody td:first-child{white-space:nowrap}
       <header class="page-heading">
         <p class="eyebrow">Explainer &middot; the loop, the tools, the sandbox, the hooks</p>
         <h1>How a coding agent actually works</h1>
-        <p class="lede">A complete coding agent in 2147 lines of plain Node: one HTTP request, eight tools, a loop
+        <p class="lede">A complete coding agent in 2372 lines of plain Node: one HTTP request, eight tools, a loop
         with four bounds, nine lifecycle hooks, a memory file and a folder it cannot escape. Read it top to
         bottom, or jump to the part you doubt.</p>
         <p class="meta">
-          <span>src/agent.js 590</span>
-          <span>src/hooks.js 398</span>
+          <span>src/agent.js 199</span>
+          <span>src/prompt.js 81</span>
           <span>src/tools.js 416</span>
-          <span>src/memory.js 247</span>
-          <span>src/config.js 192</span>
+          <span>src/cli.js 349</span>
           <span>src/workspace.js 85</span>
           <span>src/llm.js 66</span>
           <span>src/ui.js 153</span>
@@ -380,17 +379,17 @@ hands the model's own text back to it as an observation. Everything else &mdash;
 permissions, project rules &mdash; is a layer laid on top of those three. Memory is the one layer that earns its
 place early enough to be in this demo: a file the loop reads before step 1 (chapter 12).</p>
 
-<p><em>mini-coding-js</em> is those three things and two extensions: 2147 lines in <code>src/</code>, one
+<p><em>mini-coding-js</em> is those three things and two extensions: 2372 lines in <code>src/</code>, one
 dependency (<code>chalk</code>, for colour), no SDK, no framework. The model is reached with a single
 <code>fetch</code>. This page walks the whole program, in the order you would read it.</p>
 
 <div class="stats">
-  <div><b>2147</b><span>lines in src/</span></div>
-  <div><b>590</b><span>of them the loop</span></div>
+  <div><b>2372</b><span>lines in src/</span></div>
+  <div><b>199</b><span>of them the loop</span></div>
   <div><b>8</b><span>tools</span></div>
   <div><b>9</b><span>lifecycle hooks</span></div>
   <div><b>1</b><span>memory file</span></div>
-  <div><b>80</b><span>offline tests</span></div>
+  <div><b>84</b><span>offline tests</span></div>
 </div>
 
 <h3>The whole idea, in six lines</h3>
@@ -419,25 +418,96 @@ prints a variation of this. Nothing in the middle is hidden.</p>
 <section id="shape">
 <h2><span class="num">02</span><span>The shape of the program</span></h2>
 
-<p>Eight files, each answering one question an audience usually asks. They import in one direction only, so
-there is no cycle to hold in your head.</p>
-<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>590</td><td>Where is the loop? Also the nine hook call sites, the CLI, the input field and the scripted demo.</td></tr><tr><td><code>src/hooks.js</code></td><td>388</td><td>Where can outside code get a turn, and what may it change?</td></tr><tr><td><code>src/tools.js</code></td><td>416</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/memory.js</code></td><td>247</td><td>What does it know that survives the process?</td></tr><tr><td><code>src/config.js</code></td><td>192</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>153</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── the loop ───────────────┐
-   ├── llm.js         one POST      │  the agent&#x27;s only
-   ├── tools.js       schemas + run │  reach into the world
-   │     └── workspace.js   containment
-   ├── hooks.js       named moments │  the one place your
-   │     └── ui.js    every chalk call   code gets a turn
-   ├── config.js      .env + defaults
-   ├── memory.js      memory.md + fs  │  what survives
-   │                                  │   the process
-   └── ui.js          every chalk call</pre></figure>
+<p>Twelve files, each answering one question an audience usually asks. They import in one direction only, so
+there is no cycle to hold in your head &mdash; and the loop is a library, not a program: nothing in
+<code>agent.js</code> knows a flag name, a colour or an exit code.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>199</td><td><strong>Where is the loop?</strong> <code>runTask</code>: seven beats, nine hook call sites, one <code>for</code>. Nothing else lives here on purpose.</td></tr><tr><td><code>src/prompt.js</code></td><td>81</td><td>What is the model told before it starts &mdash; and how does memory get in there?</td></tr><tr><td><code>src/heartbeat.js</code></td><td>36</td><td>Why doesn&#x27;t a 60-second request look like a crash?</td></tr><tr><td><code>src/tools.js</code></td><td>416</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/hooks.js</code></td><td>398</td><td>Where can outside code get a turn, and what may it change?</td></tr><tr><td><code>src/memory.js</code></td><td>253</td><td>What does it know that survives the process?</td></tr><tr><td><code>src/demo.js</code></td><td>141</td><td>What runs when there is no network, no key and no model?</td></tr><tr><td><code>src/cli.js</code></td><td>349</td><td><strong>What does a person type?</strong> Flags, banner, input field, y/N prompt, exit codes.</td></tr><tr><td><code>src/config.js</code></td><td>195</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>153</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── THE LOOP ─────────────────┐
+   ├── prompt.js    the rules + memory
+   ├── heartbeat.js still waiting     │  what one step
+   ├── llm.js       one POST          │  needs
+   └── tools.js     schemas + run
+         └── workspace.js  containment
+                                      │
+cli.js ── THE PROGRAM ────────────────┤  everything a
+   ├── agent.js     runTask           │  person needs to
+   ├── config.js    .env + defaults   │  actually run it
+   ├── memory.js    src/memory.md
+   ├── demo.js      the fake model
+   ├── hooks.js     named moments
+   └── ui.js        every chalk call</pre></figure>
 <p>There is no plugin registry, no abstract base class, no event bus. <code>TOOL_SCHEMAS</code> is an array
 literal and <code>HANDLERS</code> is an object literal whose keys happen to be the tool names; the dispatcher
 is thirty lines. To add a ninth tool you would edit two places and be done.</p>
-<div class="callout "><strong>Read it in this order.</strong> <code>agent.js</code> first, out loud, skipping the banner code at
-the bottom. Then <code>tools.js</code> top to bottom, because the schema descriptions are the only prompt
-engineering in the project. <code>hooks.js</code> and <code>memory.js</code> are the two chapters you can read
-last, and the two an audience always asks about. Everything else is plumbing you can skim on the projector.</div>
+<p>The bottom half of that diagram is the important bit for teaching: <code>cli.js</code> imports
+<code>agent.js</code>, never the other way round. The loop can be read, tested and driven in a REPL without
+the CLI existing &mdash; which is exactly what the offline test suite does, handing <code>runTask</code> a fake
+<code>chatFn</code>.</p>
+<h3>The program, in one function</h3>
+
+<p><code>runCli</code> is everything a person touches, and it is a straight line: read the flags, resolve the
+config, build a workspace, a memory store and a <code>chatFn</code>, then hand those to <code>runTask</code> and
+turn the result into an exit code. Nothing here touches <code>messages</code>, dispatches a tool, or knows what a
+hook is beyond attaching one &mdash; which is why <code>agent.js</code> can be read without it.</p>
+<figure class="code"><figcaption><span>src/cli.js (condensed, logging trimmed)</span><span class="lang">javascript</span></figcaption><pre>async function runCli() {
+  const opts = parseArgs(process.argv.slice(2));          // flags -&gt; one object
+  if (opts.help) return usage();
+  if (opts.showHooks) return showHooks();                 // describes the loop, needs no key
+
+  const config = loadConfig({ model: opts.model });        // .env, defaults, precedence
+  const workspace = new Workspace(config.workspaceRoot);   // the sandbox the tools live in
+  const memory = new Memory({ root: config.projectRoot, file: config.memoryFile, ... });
+  if (opts.showMemory) return showMemory(memory, config);
+
+  banner({ config, workspace, memory, commandPolicy, opts });   // one reproducible header
+
+  // The only choice this file makes about the model: real or scripted.
+  const chatFn = opts.demo
+    ? demoChat()
+    : (args) =&gt; chat({ apiKey: config.apiKey, model: config.model, timeoutMs: config.requestTimeoutMs, ...args });
+
+  const hooks = opts.noHooks ? null : traceHooks({ log: console.log });
+
+  // Everything above was configuration. This is the agent.
+  const result = await runTask({
+    task, workspace, commandPolicy,
+    maxSteps: opts.maxSteps ?? (opts.demo ? DEMO_SCRIPT.length + 1 : config.maxSteps),
+    chatFn, confirm: makeConfirm(), hooks,
+    memory: opts.noMemory ? null : memory,
+  });
+
+  if (!result.ok &amp;&amp; result.reason === &#x27;request_failed&#x27;) process.exitCode = 1;
+  if (!result.ok &amp;&amp; result.reason === &#x27;max_steps&#x27;) process.exitCode = 3;
+  if (opts.demo) reportSandbox(result.messages);           // check the guards actually held
+}</pre></figure>
+<p>The dependency arrow only points one way. <code>cli.js</code> imports <code>runTask</code>; the loop has never
+heard of a flag, a banner or an exit code. Run <code>node src/agent.js</code> by itself and it says so: it is a
+library, and the program is <code>src/cli.js</code>.</p>
+
+<h3>The fake model</h3>
+
+<p>That single ternary above - <code>demoChat()</code> instead of the HTTP client - is the whole of
+<code>--demo</code>. It is a <code>chatFn</code> with the same return shape as OpenRouter, replaying a fixed script.
+Every other seam is the real one: the real loop, the real dispatcher, the real sandbox, the real memory tools.
+The only thing missing is one POST.</p>
+<figure class="code"><figcaption><span>src/demo.js</span><span class="lang">javascript</span></figcaption><pre>export function demoChat() {
+  let i = 0;
+  return async () =&gt; {
+    const message = DEMO_SCRIPT[Math.min(i, DEMO_SCRIPT.length - 1)];
+    i += 1;
+    return {
+      choices: [{ finish_reason: message.tool_calls ? &#x27;tool_calls&#x27; : &#x27;stop&#x27;, message }],
+    };
+  };
+}</pre></figure>
+<p>Because the reply is data, the script can do something a live model will not do on cue: steps 6&ndash;10
+deliberately try to escape the sandbox, and <code>sandboxScorecard()</code> then reads those results back and
+prints which guards actually held. That is chapter 15's scorecard &mdash; a claim the program checks, not a slide.</p>
+
+<div class="callout "><strong>Read it in this order.</strong> <code>agent.js</code> first and in full &mdash; it is 199 lines including
+comments. Then <code>prompt.js</code> (what the model is told) and <code>tools.js</code> top to bottom, because the
+schema descriptions are the only prompt engineering in the project. <code>hooks.js</code> and
+<code>memory.js</code> are the two chapters you can read last, and the two an audience always asks about.
+<code>cli.js</code> is the program if you need it; <code>demo.js</code> is what runs when the wifi does not.</div>
 </section>
 
 <section id="loop">
@@ -445,15 +515,14 @@ last, and the two an audience always asks about. Everything else is plumbing you
 
 <p><code>runTask</code> is the whole agent. It takes a task, builds the first two messages, and then runs the
 same seven beats until the model stops asking for tools or the step budget runs out. Here it is with the logging
-lines trimmed (<code>agent.js:46&ndash;169</code>):</p>
+lines trimmed (<code>agent.js:60&ndash;186</code>):</p>
 <figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>export async function runTask({
   task, workspace, commandPolicy, maxSteps, chatFn, confirm,
   hooks = null, memory = null, log = console.log, heartbeatMs = 5000,
 }) {
-  // Long-term memory: read once, pasted into the one message the model always gets.
-  const remembered = memory ? memory.digest() : &#x27;&#x27;;
+  // One array is the whole state. prompt.js owns the system message, memory included.
   const messages = [
-    { role: &#x27;system&#x27;, content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
+    { role: &#x27;system&#x27;, content: buildSystemPrompt({ memory, log }) },
     { role: &#x27;user&#x27;,   content: task },
   ];
   const ctx = { workspace, commandPolicy, memory, confirm };
@@ -520,7 +589,7 @@ lines trimmed (<code>agent.js:46&ndash;169</code>):</p>
 them: the loop is the same seven beats, and each beat now announces itself. Chapter 11 is what those nine
 lines mean.</p>
 <h3>The seven beats</h3>
-<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>What happens</th><th>Where</th><th>Hook</th></tr></thead><tbody><tr><td>1</td><td>A step heading is printed and a 5-second heartbeat is armed, so a slow provider never looks like a frozen program.</td><td><code>agent.js:88&ndash;96</code></td><td><code>PreModel</code></td></tr><tr><td>2</td><td>One model call: the <em>entire</em> message array plus the six tool schemas. Nothing else is sent.</td><td><code>agent.js:98</code></td><td>&mdash;</td></tr><tr><td>3</td><td>A truncated reply (<code>finish_reason: "length"</code> with no tool calls) is never dispatched as half a call; the model is told to continue smaller.</td><td><code>agent.js:114</code></td><td><code>PostModel</code></td></tr><tr><td>4</td><td>The assistant message is pushed back into history, stripped to the fields an agent needs.</td><td><code>agent.js:121</code></td><td>&mdash;</td></tr><tr><td>5</td><td>No tool calls means the model is finished: print the answer, return <code>ok: true</code>.</td><td><code>agent.js:126&ndash;134</code></td><td><code>Stop</code>, <code>SessionEnd</code></td></tr><tr><td>6</td><td>Each tool call is dispatched, its result logged, and the string appended as a <code>role: "tool"</code> message.</td><td><code>agent.js:136&ndash;161</code></td><td><code>PreToolUse</code>, <code>PostToolUse</code></td></tr><tr><td>7</td><td>Loop. The next request now holds the model's own intention <em>and</em> the world's answer to it.</td><td><code>agent.js:88</code></td><td>&mdash;</td></tr></tbody></table></div><div class="callout "><strong>The loop is the agent.</strong> Delete the <code>for</code> and you have a chatbot with tools it
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>What happens</th><th>Where</th><th>Hook</th></tr></thead><tbody><tr><td>1</td><td>A step heading is printed and a 5-second heartbeat is armed, so a slow provider never looks like a frozen program.</td><td><code>agent.js:104&ndash;112</code></td><td><code>PreModel</code></td></tr><tr><td>2</td><td>One model call: the <em>entire</em> message array plus the six tool schemas. Nothing else is sent.</td><td><code>agent.js:114</code></td><td>&mdash;</td></tr><tr><td>3</td><td>A truncated reply (<code>finish_reason: "length"</code> with no tool calls) is never dispatched as half a call; the model is told to continue smaller.</td><td><code>agent.js:130</code></td><td><code>PostModel</code></td></tr><tr><td>4</td><td>The assistant message is pushed back into history, stripped to the fields an agent needs.</td><td><code>agent.js:137</code></td><td>&mdash;</td></tr><tr><td>5</td><td>No tool calls means the model is finished: print the answer, return <code>ok: true</code>.</td><td><code>agent.js:143&ndash;151</code></td><td><code>Stop</code>, <code>SessionEnd</code></td></tr><tr><td>6</td><td>Each tool call is dispatched, its result logged, and the string appended as a <code>role: "tool"</code> message.</td><td><code>agent.js:154&ndash;179</code></td><td><code>PreToolUse</code>, <code>PostToolUse</code></td></tr><tr><td>7</td><td>Loop. The next request now holds the model's own intention <em>and</em> the world's answer to it.</td><td><code>agent.js:104</code></td><td>&mdash;</td></tr></tbody></table></div><div class="callout "><strong>The loop is the agent.</strong> Delete the <code>for</code> and you have a chatbot with tools it
 will never call. Keep it, and the model can look, act, observe and try again &mdash; which is the entire
 difference between "answers questions about your code" and "changes your code".</div>
 </section>
@@ -559,7 +628,7 @@ client is 66 lines (<code>src/llm.js</code>).</p>
 <p>Two details are worth a minute on stage.</p>
 <ul><li><strong><code>AbortSignal.timeout</code> is the entire liveness story at the transport layer.</strong> A
     socket that never answers becomes an error after 90 seconds instead of a hung agent. The heartbeat in
-    <code>agent.js</code> covers the same worry at the human layer: <code>… still waiting for the model (25s)</code>.</li><li><strong>Failures here <em>throw</em>; failures in a tool do not.</strong> A bad key, a 402, a dropped
+    <code>heartbeat.js</code> covers the same worry at the human layer: <code>… still waiting for the model (25s)</code>.</li><li><strong>Failures here <em>throw</em>; failures in a tool do not.</strong> A bad key, a 402, a dropped
     connection is not something the model can fix, so it stops the run with exit code 1. A failed edit <em>is</em>
     something the model can fix, so it comes back as text.</li></ul>
 <h3>Sanitising the assistant message</h3>
@@ -609,7 +678,7 @@ file, no summary of what happened earlier. Delete the array and the agent has no
 push happens inside the same <code>for</code> that ran the tool &mdash; even when the tool returned an
 <code>ERROR</code> string, because an error is still an answer.</p>
 <div class="callout "><strong>Prompt design lives in three places, all of them ordinary code.</strong> The
-<code>SYSTEM_PROMPT</code> in <code>agent.js</code> (how to work), the schema descriptions in
+system prompt in <code>prompt.js</code> (how to work), the schema descriptions in
 <code>tools.js</code> (what each tool is for), and the error strings the handlers return (how to recover).
 There is no separate "prompt file" to load at runtime.</div>
 <div class="callout "><strong>One array, one run.</strong> This memory dies with the process &mdash; restart and the agent
@@ -866,12 +935,12 @@ you make this real?"</em></p>
 <p>The trace is on by default: every run - <code>npm start</code> as much as <code>npm run demo</code> - prints
 each lifecycle moment as one line, tagged <code>[HOOK:Name]</code>, followed by what that moment is
 <em>for</em> and what this firing carried. It needs no key and no network, and one flag explains it:</p>
-<figure class="code"><figcaption><span>terminal</span><span class="lang">bash</span></figcaption><pre>node src/agent.js --hooks              # every hook: icon, colour, what it gets, why it exists, then exit
-node src/agent.js --demo               # the same lifecycle, printed as each moment fires
-node src/agent.js --demo --no-hooks    # the plain loop, with the trace silenced</pre></figure>
+<figure class="code"><figcaption><span>terminal</span><span class="lang">bash</span></figcaption><pre>node src/cli.js --hooks              # every hook: icon, colour, what it gets, why it exists, then exit
+node src/cli.js --demo               # the same lifecycle, printed as each moment fires
+node src/cli.js --demo --no-hooks    # the plain loop, with the trace silenced</pre></figure>
 <p><code>--hooks</code> prints the catalogue. It is generated from <code>HOOK_EVENTS</code>, the same array the
 loop fires, so this page and the console cannot drift apart:</p>
-<figure class="code"><figcaption><span>node src/agent.js --hooks</span><span class="lang">console</span></figcaption><pre>── lifecycle hooks - 9 moments in one run ──────────────────────
+<figure class="code"><figcaption><span>node src/cli.js --hooks</span><span class="lang">console</span></figcaption><pre>── lifecycle hooks - 9 moments in one run ──────────────────────
   A hook is a function attached to a named moment in the loop. agent.js calls each
   moment; a hook may observe, rewrite what the model reads, or block a call outright.
 
@@ -894,7 +963,7 @@ loop fires, so this page and the console cannot drift apart:</p>
   PostToolUse (replace the observation). The rest only watch - which is exactly why a
   hook is a safe first extension point.</pre></figure>
 <p>The default trace is one observer per event, attached by <code>traceHooks()</code>. This is a real excerpt from
-<code>node src/agent.js --demo</code>; each tag is painted in its hook's own colour:</p>
+<code>node src/cli.js --demo</code>; each tag is painted in its hook's own colour:</p>
 <figure class="code"><figcaption><span>the lifecycle, live</span><span class="lang">console</span></figcaption><pre>  🚀  [HOOK:SessionStart] once, before the first model call - Show the loop, then try to break the sandbox: create a script, run it, e
   ✍️  [HOOK:UserPromptSubmit] once, as the task enters the loop - Show the loop, then try to break the sandbox: create a script, run it, e
 
@@ -1045,7 +1114,7 @@ with the `recall` tool.
     <code>git checkout</code> is picked up on the next call &mdash; there is no state that can disagree with the
     text on disk. A memory module with a cache is a memory module that lies.</li><li><strong>It diffs like code.</strong> <code>src/memory.md</code> is a normal file in the repo: it appears
     in <code>git status</code>, it diffs cleanly, and a memory can be reviewed or deleted in a pull request.
-    Point <code>MEMORY_FILE</code> at an absolute path to share one store across checkouts.</li><li><strong>You can audit it.</strong> <code>node src/agent.js --memory</code> prints the file and the exact block
+    Point <code>MEMORY_FILE</code> at an absolute path to share one store across checkouts.</li><li><strong>You can audit it.</strong> <code>node src/cli.js --memory</code> prints the file and the exact block
     the prompt received. "What does it remember about me?" is a <code>cat</code>, not an interrogation.</li></ul>
 <h3>Reading it: eager, then lazy</h3>
 
@@ -1064,12 +1133,18 @@ Treat them as strong hints, not facts to trust blindly: the code may have moved 
 (9 older memories not shown - search memory.md with the recall tool)</pre></figure>
 <p>And the whole integration in the loop is four lines at the top of <code>runTask</code> &mdash; no new message
 role, no special channel, no vector store. Memory is text in the one message the model always receives:</p>
-<figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>const remembered = memory ? memory.digest() : '';
-const messages = [
-  { role: 'system', content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
+<figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>const messages = [
+  { role: 'system', content: buildSystemPrompt({ memory, log }) },
   { role: 'user', content: task },
 ];
 const ctx = { workspace, commandPolicy, memory, confirm };</pre></figure>
+<p>...and the two lines that do the work are in <code>prompt.js</code>, because "what the model is told" is one
+decision made in one place: the rules, then the digest, then a one-line note to the console saying how many
+memories were carried.</p>
+<figure class="code"><figcaption><span>src/prompt.js</span><span class="lang">javascript</span></figcaption><pre>// buildSystemPrompt({ memory, log }) - the whole of it
+const digest = memory.digest();
+if (!digest) return rules;
+return `${rules}\n\n${digest}`;</pre></figure>
 <h3>The code</h3>
 
 <p>Parsing is one regex, and anything that is not a tagged bullet is ignored &mdash; which is what makes prose,
@@ -1144,7 +1219,7 @@ memory ← src/memory.md - 2 memories added to the system prompt</pre></figure>
 "stuff what fits" into "retrieve when needed", with no code change at all.</p>
 <div class="callout "><strong>What this is not.</strong> No embeddings, no vector search, no summarising, no write on every
 turn. It is one file a human can read, diff and delete a line from &mdash; which is why the answer to "why did
-it remember that?" is <code>node src/agent.js --memory</code> rather than a log hunt. Every real system grows
+it remember that?" is <code>node src/cli.js --memory</code> rather than a log hunt. Every real system grows
 past this; almost all of them start here.</div>
 </section>
 
@@ -1197,13 +1272,15 @@ consequence rather than a silent stall.</p>
 
 <p>Between them, those bounds would still leave a 90-second silence, which on a projector looks identical to a
 crash. So a timer prints something every five seconds while the request is in flight:</p>
-<figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>function heartbeat(log, everyMs = 5000) {
+<figure class="code"><figcaption><span>src/heartbeat.js</span><span class="lang">javascript</span></figcaption><pre>export function heartbeat(log, everyMs = 5000) {
   const started = Date.now();
+
   const timer = setInterval(() =&gt; {
     const seconds = Math.round((Date.now() - started) / 1000);
     log(ui.waiting(`  … still waiting for the model (${seconds}s)`));
   }, everyMs);
-  timer.unref?.();                              // never keep the process alive on its own
+
+  timer.unref?.();                  // never keep the process alive on its own
   return { stop: () =&gt; clearInterval(timer) };
 }</pre></figure>
 <p>It is armed just before the call and stopped just after, including on the failure path. <code>unref()</code>
@@ -1222,7 +1299,7 @@ respects the model and one that argues with it.</div>
 <h2><span class="num">15</span><span>A real run, annotated</span></h2>
 
 <p>Everything on this page so far is description. This is a real run, captured from
-<code>node src/agent.js --demo</code> with colour disabled, unedited:</p>
+<code>node src/cli.js --demo</code> with colour disabled, unedited:</p>
 <figure class="code"><figcaption><span>terminal</span><span class="lang">console</span></figcaption><pre>min-coding-js
 workspace : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-agent-js\workspace
 model     : scripted (no network)
@@ -1364,7 +1441,7 @@ think: Done. Created demo/hello.js, ran it, edited one string, ran it again (exi
 ── final answer ──────────────────────────────────────
 Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
   🏁  [HOOK:Stop] the model answered and the loop is ending - 13 step(s) - Done. Created demo/hello.js, ran it, edited one string, 
-  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 413ms
+  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 408ms
 
 ── sandbox checks ────────────────────────────────────────────
   ✓ file tools stay inside the workspace - ERROR: path escapes the workspace
@@ -1420,16 +1497,16 @@ npm install                       # one dependency: chalk
 npm start                         # live model, task typed at the &quot;task ›&quot; prompt
 npm start -- &quot;create hello.js that prints today&#x27;s date and time, run it, and save its output to hello-output.txt&quot;
 npm run demo                      # scripted run: no network, no key, no excuses
-npm test                          # 80 offline tests, no key, no network
+npm test                          # 84 offline tests, no key, no network
 
-node src/agent.js "task" --yes                # auto-approve commands
-node src/agent.js "task" --max-steps 6        # tighter loop
-node src/agent.js "task" --model anthropic/claude-sonnet-4.5
-node src/agent.js --hooks                     # the nine lifecycle hooks, in colour, then exit
-node src/agent.js "task" --no-hooks           # silence the [HOOK:...] trace lines
-node src/agent.js --memory                    # memory.md, and exactly what it injects
-node src/agent.js "task" --no-memory          # one run with nothing remembered
-node src/agent.js --help                      # usage summary</pre></figure>
+node src/cli.js "task" --yes                # auto-approve commands
+node src/cli.js "task" --max-steps 6        # tighter loop
+node src/cli.js "task" --model anthropic/claude-sonnet-4.5
+node src/cli.js --hooks                     # the nine lifecycle hooks, in colour, then exit
+node src/cli.js "task" --no-hooks           # silence the [HOOK:...] trace lines
+node src/cli.js --memory                    # memory.md, and exactly what it injects
+node src/cli.js "task" --no-memory          # one run with nothing remembered
+node src/cli.js --help                      # usage summary</pre></figure>
 <p>The five-minute talk script is in the README: run <code>--demo</code> and narrate
 <em>think → tool → result → think</em>; delete <code>workspace/demo/hello.js</code> and run it live with
 <code>--yes</code>; then ask for an edit that cannot match, so the audience sees the error come back as a tool
@@ -1457,7 +1534,7 @@ layer this demo does not have.</p>
     a replacement for it, and all of them assume the loop already works. What <em>is</em> here is the hooks in
     chapter 11 (nine events, no config file, no plugin loader) and the memory in chapter 12.</li><li><strong>Memory is one markdown file with substring search.</strong> No embeddings, no vector store, no
     automatic summarising, no write on every turn. It is the smallest thing that actually persists &mdash; and
-    the honest answer to "why did it remember that?" is <code>node src/agent.js --memory</code>.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
+    the honest answer to "why did it remember that?" is <code>node src/cli.js --memory</code>.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
     the system prompt asks for one per step because interleaved edits are much harder to audit live.</li></ul>
 <h3>The ten principles, in one place</h3>
 <div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Principle</th><th>Where to see it</th></tr></thead><tbody><tr><td>1</td><td>Tool calling is the model's only ability to act.</td><td><code>src/tools.js</code> &mdash; the schemas are the prompt</td></tr><tr><td>2</td><td>The loop is the agent.</td><td><code>runTask</code>, <code>agent.js:88</code></td></tr><tr><td>3</td><td>Everything is messages.</td><td>one array, four roles, no other state</td></tr><tr><td>4</td><td>Errors are observations, not crashes.</td><td><code>runTool</code>'s try/catch, <code>edit_file</code>'s errors, a blocked <code>PreToolUse</code></td></tr><tr><td>5</td><td>Exit codes close the loop.</td><td><code>exit code 0</code> versus <code>1</code> in the result string</td></tr><tr><td>6</td><td>Human in the loop.</td><td><code>CMD_POLICY=ask</code>, plus the hard-deny list</td></tr><tr><td>7</td><td>Least privilege.</td><td><code>Workspace.resolve()</code>, the child-process env allow-list</td></tr><tr><td>8</td><td>Bounded autonomy.</td><td><code>maxSteps</code>, the truncation guard, both timeouts, every memory cap</td></tr><tr><td>9</td><td>Extension points belong at named moments.</td><td><code>src/hooks.js</code> &mdash; nine events, called by the loop, never edited into it</td></tr><tr><td>10</td><td>Memory is a file, not a mystery.</td><td><code>src/memory.js</code> &mdash; <code>memory.md</code>, a bounded digest, and <code>recall</code></td></tr></tbody></table></div>
@@ -1470,8 +1547,8 @@ seen a coding agent do is built from these pieces &mdash; and now you know what 
         Built from the source in <code>mini-coding-js/</code> &mdash; every excerpt is real code with only the
         logging lines trimmed and long lines rewrapped to fit, and the run in chapter 15 is a captured terminal
         session.
-        Tests: <code>npm test</code> (80 offline, no key, no network). Demo: <code>npm run demo</code>.
-        Hooks: <code>npm run hooks</code>. Memory: <code>node src/agent.js --memory</code>.
+        Tests: <code>npm test</code> (84 offline, no key, no network). Demo: <code>npm run demo</code>.
+        Hooks: <code>npm run hooks</code>. Memory: <code>node src/cli.js --memory</code>.
       </p>
     </div>
   </main>

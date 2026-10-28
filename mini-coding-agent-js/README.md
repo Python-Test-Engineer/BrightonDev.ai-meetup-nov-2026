@@ -4,9 +4,11 @@ A coding agent in plain Node, built to show what an agent actually is: **an LLM 
 a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
 draws the coloured output.
 
-The loop itself is one ~600-line file (`src/agent.js`); the tools, the sandbox, the
-config, the console theme, the lifecycle hooks and long-term memory bring `src/` to
-~2150 lines. Small enough to read on a projector during a talk.
+The loop itself is one ~200-line file (`src/agent.js`), of which ~120 lines are code:
+no flags, no colours, no banner. Everything else - tools, the system prompt, the
+sandbox, config, the console palette, lifecycle hooks, long-term memory, the scripted
+demo and the CLI - is its own module, and `src/` comes to ~2370 lines. Small enough
+to read on a projector, and split so that the file to teach from never grows.
 
 ```
         ┌─────────────┐
@@ -92,18 +94,18 @@ Nothing else to install: Node 20+ and its built-in `fetch`, `node:child_process`
 and `node:test` do the rest.
 
 ```bash
-node src/agent.js                             live model, task typed at the prompt
-node src/agent.js --demo                      # scripted run: the loop AND the sandbox guards
-node src/agent.js "task" --yes                # auto-approve commands
-node src/agent.js "task" --allow-commands     # same thing, as a flag
-node src/agent.js "task" --max-steps 6        # tighter loop
-node src/agent.js "task" --model anthropic/claude-sonnet-4.5
-node src/agent.js --hooks                     # the lifecycle: every hook, icon, colour, why
-node src/agent.js "task" --no-hooks           # silence the [HOOK:...] trace lines
-node src/agent.js --memory                    # the memory store, and exactly what it injects
-node src/agent.js "task" --no-memory          # one run with nothing remembered
-node src/agent.js --help                      # usage summary
-npm test                                      # 80 offline tests
+node src/cli.js                             live model, task typed at the prompt
+node src/cli.js --demo                      # scripted run: the loop AND the sandbox guards
+node src/cli.js "task" --yes                # auto-approve commands
+node src/cli.js "task" --allow-commands     # same thing, as a flag
+node src/cli.js "task" --max-steps 6        # tighter loop
+node src/cli.js "task" --model anthropic/claude-sonnet-4.5
+node src/cli.js --hooks                     # the lifecycle: every hook, icon, colour, why
+node src/cli.js "task" --no-hooks           # silence the [HOOK:...] trace lines
+node src/cli.js --memory                    # the memory store, and exactly what it injects
+node src/cli.js "task" --no-memory          # one run with nothing remembered
+node src/cli.js --help                      # usage summary
+npm test                                      # 84 offline tests
 ```
 
 `--model` beats `.env`, which beats your shell (next section). A bare model name
@@ -149,19 +151,31 @@ vendor with `OPENROUTER_PROVIDER_PREFIX=...` if the guess is wrong.
 
 ## Files
 
+Read them in that order: the loop first, then the two things it calls on every step,
+then the extension points, then the program that runs it.
+
 | File | Lines | What it shows |
 |---|---|---|
-| `src/agent.js` | ~590 | the ReAct loop and its nine hook call sites, system prompt, CLI, input field, heartbeat, scripted demo + sandbox scorecard |
+| `src/agent.js` | ~200 | **the loop** - `runTask`: seven beats, nine hook call sites, one `for`. Nothing else. |
+| `src/prompt.js` | ~80 | the system prompt: the standing rules, plus the memory block assembled at run time |
+| `src/heartbeat.js` | ~35 | liveness: print "still waiting" every 5 s so a slow call never looks frozen |
 | `src/tools.js` | ~415 | tool schemas the model reads + the dispatcher, the deny-list and the env allow-list |
-| `src/hooks.js` | ~390 | the lifecycle: nine named moments, the registry, the `--hooks` catalogue and the live trace |
-| `src/memory.js` | ~245 | long-term memory: `memory.md` as the store, the bounded digest for the prompt, search, dedupe and caps |
-| `src/config.js` | ~190 | `.env` discovery and loading, model + policy + memory config |
+| `src/hooks.js` | ~400 | the lifecycle: nine named moments, the registry, the `--hooks` catalogue and the live trace |
+| `src/memory.js` | ~250 | long-term memory: `memory.md` as the store, the bounded digest, search, dedupe and caps |
+| `src/demo.js` | ~140 | the scripted model for `--demo`, and the scorecard that checks the sandbox guards held |
+| `src/cli.js` | ~350 | **the program** - flags, banner, input field, y/N confirm, `--hooks`/`--memory`, exit codes |
+| `src/config.js` | ~195 | `.env` discovery and loading, model + policy + memory config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
 | `src/ui.js` | ~150 | the console palette (including every hook colour), plus the plain-English meaning of each exit code |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
-| `test/` | ~1230 | offline tests for the loop, the hooks, the demo's sandbox checks, the config, the tools, memory, the palette, the input field, the HTTP timeout and the path resolver |
+| `test/` | ~1290 | offline tests for the loop, the prompt, the hooks, the demo's sandbox checks, the config, the tools, memory, the palette, the input field, the HTTP timeout and the path resolver |
 | `src/memory.md` | - | the long-term memory store: markdown, one bullet per memory, readable and editable by hand |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
+
+`src/agent.js` is a **library**: it exports `runTask` and does nothing when you run it
+(`node src/agent.js` prints where the program is). The program is `src/cli.js`, which
+is what `npm start` runs. That split is the point - the file you teach from never
+accumulates argument parsing, banners or exit codes.
 
 ## Coloured output
 
@@ -223,9 +237,9 @@ loop, able to observe, rewrite or block.
 
 ```bash
 npm start                     # every run prints its lifecycle as [HOOK:Name] lines
-npm run trace                 # node src/agent.js --demo (the trace is on by default)
+npm run trace                 # node src/cli.js --demo (the trace is on by default)
 npm run hooks                 # the whole lifecycle, with icons, colour and description
-node src/agent.js "task" --no-hooks    # silence the trace lines
+node src/cli.js "task" --no-hooks    # silence the trace lines
 ```
 
 Every run prints the lifecycle as it happens - one grep-able line per moment, tagged
@@ -263,7 +277,7 @@ in the explainer. `--no-hooks` turns it off when you want the plain loop back.
 | 8 | `StepLimit` | ⏳ | the loop hit `maxSteps` | observe (escalate, dump the transcript) |
 | 9 | `SessionEnd` | 🔒 | always - finished or not | observe (the last code to run) |
 
-`node src/agent.js --hooks` prints exactly this table, generated from the same
+`node src/cli.js --hooks` prints exactly this table, generated from the same
 `HOOK_EVENTS` array the loop fires - so the documentation cannot drift from the
 code:
 
@@ -342,8 +356,8 @@ sandbox, so you can open it in your editor and the agent can only reach it throu
 
 ```bash
 npm start                      # a run starts by injecting the newest memories
-node src/agent.js --memory     # the file, and exactly what the prompt gets
-node src/agent.js "..." --no-memory   # amnesia, for one run
+node src/cli.js --memory     # the file, and exactly what the prompt gets
+node src/cli.js "..." --no-memory   # amnesia, for one run
 ```
 
 The store is markdown, one bullet per memory, and the bullet *is* the record:
@@ -394,9 +408,8 @@ Treat them as strong hints, not facts to trust blindly: the code may have moved 
 
 ```js
 // agent.js - the whole integration, at the top of runTask
-const remembered = memory ? memory.digest() : '';
 const messages = [
-  { role: 'system', content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
+  { role: 'system', content: buildSystemPrompt({ memory, log }) },  // rules + memory (prompt.js)
   { role: 'user', content: task },
 ];
 const ctx = { workspace, commandPolicy, memory, confirm };
@@ -496,14 +509,14 @@ transcript like everything else.
 - Memory is one markdown file with substring search: no embeddings, no vector
   store, no automatic summarising, no write on every turn. It is the smallest thing
   that actually persists - and the honest answer to "why did it remember that?" is
-  `node src/agent.js --memory`.
+  `node src/cli.js --memory`.
 - With no TTY (piped input, CI) the `ask` policy degrades to deny: an unanswerable
   prompt never becomes an approval.
 
 ## Talk script (5 minutes)
 
 ```bash
-node src/agent.js --demo
+node src/cli.js --demo
 ```
 
 Narrate each line as it prints: *think → tool → result → think*. Then the demo
@@ -518,7 +531,7 @@ asking the agent to do something it will fail at first (e.g. "edit hello.js to u
 a variable called `msg`") so the audience sees the error come back as a tool result
 and the model fix it on the next iteration.
 
-With two minutes left, `node src/agent.js --hooks` puts the lifecycle on screen
+With two minutes left, `node src/cli.js --hooks` puts the lifecycle on screen
 (nine moments, icons, colours, one sentence each) &mdash; and the run you have just
 watched printed the same nine as `[HOOK:Name]` lines, so the slide and the console
 already agree. That is the "how would you extend this?" question, answered.
@@ -526,7 +539,7 @@ already agree. That is the "how would you extend this?" question, answered.
 Then run the demo a second time: the banner says how many memories are on disk and a
 `memory ← src/memory.md - 2 memories added to the system prompt` line appears before step 1,
 because the `remember` call from the previous run outlived the process.
-`node src/agent.js --memory` prints the file and the exact block the prompt received;
+`node src/cli.js --memory` prints the file and the exact block the prompt received;
 `--no-memory` gives you the amnesia run for comparison.
 
 ## Tests
@@ -535,7 +548,7 @@ because the `remember` call from the previous run outlived the process.
 npm test        # node --test: offline, no key, no network
 ```
 
-80 tests cover the loop (including truncation and the max-steps stop), the lifecycle
+84 tests cover the loop (including truncation and the max-steps stop), the lifecycle
 hooks (every event documented, blocking, replacing, a throwing hook, the order a run
 fires them in), the scripted demo's sandbox checks, `.env` discovery and precedence,
 every tool's failure modes, the child-process env allow-list, the path resolver's

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
-import { askTask } from '../src/agent.js';
+import { askTask } from '../src/cli.js';
 
 /** A stand-in terminal: write lines into it, read what was printed back. */
 function pipe() {

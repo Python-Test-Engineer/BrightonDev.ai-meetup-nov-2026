@@ -7,8 +7,8 @@ npm start -- "create hello.js that prints today's date and time, run it and save
 Memory, the short version (see README "Long-term memory" and src/memory.js):
 
 npm run demo                 # step 11 remembers one fact, step 12 recalls it
-node src/agent.js --memory   # the store, and exactly what the system prompt gets
-node src/agent.js --demo     # run it again: "memory <- memory.md - 1 memory added"
+node src/cli.js --memory   # the store, and exactly what the system prompt gets
+node src/cli.js --demo     # run it again: "memory <- memory.md - 1 memory added"
 
 And a prompt that should end with a remember call, not just a file:
 
