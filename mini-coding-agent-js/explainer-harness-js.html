@@ -322,7 +322,7 @@ tbody td:first-child{white-space:nowrap}
   <aside class="sidebar">
     <a class="side-kicker" href="#top">Brighton Dev AI &middot; Nov 2026</a>
     <p class="side-title">mini-coding-js</p>
-    <p class="side-sub">An agent is a model, six tools and a loop. This is all of it.</p>
+    <p class="side-sub">An agent is a model, eight tools, a loop and a memory file. This is all of it.</p>
     <div class="side-rule"></div>
     <p class="side-label">Contents</p>
     <nav class="toc" id="toc">
@@ -331,22 +331,23 @@ tbody td:first-child{white-space:nowrap}
 <a href="#loop"><span class="n">03</span><span>The loop</span></a>
 <a href="#model"><span class="n">04</span><span>The model call</span></a>
 <a href="#messages"><span class="n">05</span><span>Messages are the memory</span></a>
-<a href="#tools"><span class="n">06</span><span>The six tools</span></a>
+<a href="#tools"><span class="n">06</span><span>The eight tools</span></a>
 <a href="#edit"><span class="n">07</span><span>edit_file, the interesting one</span></a>
 <a href="#sandbox"><span class="n">08</span><span>The sandbox</span></a>
 <a href="#policy"><span class="n">09</span><span>Human in the loop</span></a>
 <a href="#ui"><span class="n">10</span><span>The console palette</span></a>
 <a href="#hooks"><span class="n">11</span><span>Lifecycle hooks</span></a>
-<a href="#config"><span class="n">12</span><span>Configuration and precedence</span></a>
-<a href="#bounds"><span class="n">13</span><span>Bounded autonomy</span></a>
-<a href="#trace"><span class="n">14</span><span>A real run, annotated</span></a>
-<a href="#run"><span class="n">15</span><span>Run it yourself</span></a>
-<a href="#limits"><span class="n">16</span><span>What it deliberately does not do</span></a>
+<a href="#memory"><span class="n">12</span><span>Long-term memory</span></a>
+<a href="#config"><span class="n">13</span><span>Configuration and precedence</span></a>
+<a href="#bounds"><span class="n">14</span><span>Bounded autonomy</span></a>
+<a href="#trace"><span class="n">15</span><span>A real run, annotated</span></a>
+<a href="#run"><span class="n">16</span><span>Run it yourself</span></a>
+<a href="#limits"><span class="n">17</span><span>What it deliberately does not do</span></a>
     </nav>
     <div class="side-foot">
       Source: <code>mini-coding-js/</code><br>
-      1704 lines in <code>src/</code> &middot; Node 20+ &middot; one dependency<br>
-      Chapters 01&ndash;16 follow the files.
+      2147 lines in <code>src/</code> &middot; Node 20+ &middot; one dependency<br>
+      Chapters 01&ndash;17 follow the files.
     </div>
   </aside>
 
@@ -355,17 +356,18 @@ tbody td:first-child{white-space:nowrap}
       <header class="page-heading">
         <p class="eyebrow">Explainer &middot; the loop, the tools, the sandbox, the hooks</p>
         <h1>How a coding agent actually works</h1>
-        <p class="lede">A complete coding agent in 1704 lines of plain Node: one HTTP request, six tools, a loop
-        with four bounds, nine lifecycle hooks, and a folder it cannot escape. Read it top to bottom, or jump to
-        the part you doubt.</p>
+        <p class="lede">A complete coding agent in 2147 lines of plain Node: one HTTP request, eight tools, a loop
+        with four bounds, nine lifecycle hooks, a memory file and a folder it cannot escape. Read it top to
+        bottom, or jump to the part you doubt.</p>
         <p class="meta">
-          <span>src/agent.js 500</span>
-          <span>src/hooks.js 388</span>
-          <span>src/tools.js 351</span>
-          <span>src/config.js 170</span>
+          <span>src/agent.js 590</span>
+          <span>src/hooks.js 398</span>
+          <span>src/tools.js 416</span>
+          <span>src/memory.js 247</span>
+          <span>src/config.js 192</span>
           <span>src/workspace.js 85</span>
           <span>src/llm.js 66</span>
-          <span>src/ui.js 144</span>
+          <span>src/ui.js 153</span>
         </p>
       </header>
 
@@ -374,20 +376,21 @@ tbody td:first-child{white-space:nowrap}
 
 <p>Strip the branding off a coding agent and three things remain: a <strong>model</strong> that can only
 produce text, a set of <strong>tools</strong> that can actually do something, and a <strong>loop</strong> that
-hands the model's own text back to it as an observation. Everything else &mdash; retries, memory, sub-agents,
-skills, permissions, project rules &mdash; is a layer laid on top of those three.</p>
+hands the model's own text back to it as an observation. Everything else &mdash; retries, sub-agents, skills,
+permissions, project rules &mdash; is a layer laid on top of those three. Memory is the one layer that earns its
+place early enough to be in this demo: a file the loop reads before step 1 (chapter 12).</p>
 
-<p><em>mini-coding-js</em> is those three things and nothing else: 1704 lines in <code>src/</code>, one
+<p><em>mini-coding-js</em> is those three things and two extensions: 2147 lines in <code>src/</code>, one
 dependency (<code>chalk</code>, for colour), no SDK, no framework. The model is reached with a single
 <code>fetch</code>. This page walks the whole program, in the order you would read it.</p>
 
 <div class="stats">
-  <div><b>1704</b><span>lines in src/</span></div>
-  <div><b>500</b><span>of them the loop</span></div>
-  <div><b>6</b><span>tools</span></div>
+  <div><b>2147</b><span>lines in src/</span></div>
+  <div><b>590</b><span>of them the loop</span></div>
+  <div><b>8</b><span>tools</span></div>
   <div><b>9</b><span>lifecycle hooks</span></div>
-  <div><b>1</b><span>dependency</span></div>
-  <div><b>64</b><span>offline tests</span></div>
+  <div><b>1</b><span>memory file</span></div>
+  <div><b>80</b><span>offline tests</span></div>
 </div>
 
 <h3>The whole idea, in six lines</h3>
@@ -416,23 +419,25 @@ prints a variation of this. Nothing in the middle is hidden.</p>
 <section id="shape">
 <h2><span class="num">02</span><span>The shape of the program</span></h2>
 
-<p>Seven files, each answering one question an audience usually asks. They import in one direction only, so
+<p>Eight files, each answering one question an audience usually asks. They import in one direction only, so
 there is no cycle to hold in your head.</p>
-<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>500</td><td>Where is the loop? Also the nine hook call sites, the CLI, the input field and the scripted demo.</td></tr><tr><td><code>src/hooks.js</code></td><td>388</td><td>Where can outside code get a turn, and what may it change?</td></tr><tr><td><code>src/tools.js</code></td><td>351</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/config.js</code></td><td>170</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>144</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── the loop ───────────────┐
+<div class="table-wrap"><table class=""><thead><tr><th>File</th><th>Lines</th><th>The question it answers</th></tr></thead><tbody><tr><td><code>src/agent.js</code></td><td>590</td><td>Where is the loop? Also the nine hook call sites, the CLI, the input field and the scripted demo.</td></tr><tr><td><code>src/hooks.js</code></td><td>388</td><td>Where can outside code get a turn, and what may it change?</td></tr><tr><td><code>src/tools.js</code></td><td>416</td><td>What can the model do, and what happens when it asks?</td></tr><tr><td><code>src/memory.js</code></td><td>247</td><td>What does it know that survives the process?</td></tr><tr><td><code>src/config.js</code></td><td>192</td><td>Which key, which model, which limits &mdash; and where each value came from.</td></tr><tr><td><code>src/workspace.js</code></td><td>85</td><td>How is a path stopped from leaving the sandbox?</td></tr><tr><td><code>src/llm.js</code></td><td>66</td><td>What exactly goes over the wire?</td></tr><tr><td><code>src/ui.js</code></td><td>153</td><td>Where is the colour? (Nowhere else.)</td></tr></tbody></table></div><figure class="ascii"><figcaption><span>imports, top to bottom</span></figcaption><pre>agent.js ── the loop ───────────────┐
    ├── llm.js         one POST      │  the agent&#x27;s only
    ├── tools.js       schemas + run │  reach into the world
    │     └── workspace.js   containment
    ├── hooks.js       named moments │  the one place your
    │     └── ui.js    every chalk call   code gets a turn
    ├── config.js      .env + defaults
+   ├── memory.js      memory.md + fs  │  what survives
+   │                                  │   the process
    └── ui.js          every chalk call</pre></figure>
 <p>There is no plugin registry, no abstract base class, no event bus. <code>TOOL_SCHEMAS</code> is an array
 literal and <code>HANDLERS</code> is an object literal whose keys happen to be the tool names; the dispatcher
-is thirty lines. To add a seventh tool you would edit two places and be done.</p>
+is thirty lines. To add a ninth tool you would edit two places and be done.</p>
 <div class="callout "><strong>Read it in this order.</strong> <code>agent.js</code> first, out loud, skipping the banner code at
 the bottom. Then <code>tools.js</code> top to bottom, because the schema descriptions are the only prompt
-engineering in the project. <code>hooks.js</code> is the chapter you can read last, and the one an audience
-always asks about. Everything else is plumbing you can skim on the projector.</div>
+engineering in the project. <code>hooks.js</code> and <code>memory.js</code> are the two chapters you can read
+last, and the two an audience always asks about. Everything else is plumbing you can skim on the projector.</div>
 </section>
 
 <section id="loop">
@@ -443,13 +448,15 @@ same seven beats until the model stops asking for tools or the step budget runs 
 lines trimmed (<code>agent.js:46&ndash;169</code>):</p>
 <figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>export async function runTask({
   task, workspace, commandPolicy, maxSteps, chatFn, confirm,
-  hooks = null, log = console.log, heartbeatMs = 5000,
+  hooks = null, memory = null, log = console.log, heartbeatMs = 5000,
 }) {
+  // Long-term memory: read once, pasted into the one message the model always gets.
+  const remembered = memory ? memory.digest() : &#x27;&#x27;;
   const messages = [
-    { role: &#x27;system&#x27;, content: SYSTEM_PROMPT },
+    { role: &#x27;system&#x27;, content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
     { role: &#x27;user&#x27;,   content: task },
   ];
-  const ctx = { workspace, commandPolicy, confirm };
+  const ctx = { workspace, commandPolicy, memory, confirm };
 
   await hook.run(&#x27;SessionStart&#x27;, { task, workspace: workspace.root });        // 1
   const submitted = await hook.run(&#x27;UserPromptSubmit&#x27;, { task });            // 2
@@ -605,15 +612,19 @@ push happens inside the same <code>for</code> that ran the tool &mdash; even whe
 <code>SYSTEM_PROMPT</code> in <code>agent.js</code> (how to work), the schema descriptions in
 <code>tools.js</code> (what each tool is for), and the error strings the handlers return (how to recover).
 There is no separate "prompt file" to load at runtime.</div>
+<div class="callout "><strong>One array, one run.</strong> This memory dies with the process &mdash; restart and the agent
+knows nothing. That is not a bug in the design, it is the boundary where chapter 12 begins:
+<code>memory.md</code> and the two extra tools that read and write it.</div>
 </section>
 
 <section id="tools">
-<h2><span class="num">06</span><span>The six tools</span></h2>
+<h2><span class="num">06</span><span>The eight tools</span></h2>
 
 <p>A tool is two things that must agree: a JSON schema the model reads, and a JavaScript function that runs
 when the model names it. The model never touches the filesystem &mdash; it emits JSON naming a tool, and the
-harness executes it.</p>
-<div class="table-wrap"><table class=""><thead><tr><th>Tool</th><th>What it does</th></tr></thead><tbody><tr><td><code>list_files</code></td><td>Recursive listing, depth 3 by default (max 6), skipping <code>node_modules</code>, <code>.git</code>, <code>.venv</code>, <code>__pycache__</code>. Capped at 200 entries.</td></tr><tr><td><code>read_file</code></td><td>Line-numbered, paged via <code>offset</code>/<code>limit</code>, and says how many lines remain.</td></tr><tr><td><code>create_file</code></td><td><strong>Fails</strong> if the file already exists &mdash; forces the model to edit rather than clobber.</td></tr><tr><td><code>write_file</code></td><td>Create or completely overwrite; parent folders are made for you.</td></tr><tr><td><code>edit_file</code></td><td>Exact-snippet replace. Zero matches is an error; more than one is an error unless <code>replace_all</code>.</td></tr><tr><td><code>run_command</code></td><td>Shell in the workspace root, 30&nbsp;s timeout, returns exit code plus stdout and stderr.</td></tr></tbody></table></div>
+harness executes it. Six of the eight change the workspace; the last two change what the <em>next</em> process
+knows about it (chapter 12).</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Tool</th><th>What it does</th></tr></thead><tbody><tr><td><code>list_files</code></td><td>Recursive listing, depth 3 by default (max 6), skipping <code>node_modules</code>, <code>.git</code>, <code>.venv</code>, <code>__pycache__</code>. Capped at 200 entries.</td></tr><tr><td><code>read_file</code></td><td>Line-numbered, paged via <code>offset</code>/<code>limit</code>, and says how many lines remain.</td></tr><tr><td><code>create_file</code></td><td><strong>Fails</strong> if the file already exists &mdash; forces the model to edit rather than clobber.</td></tr><tr><td><code>write_file</code></td><td>Create or completely overwrite; parent folders are made for you.</td></tr><tr><td><code>edit_file</code></td><td>Exact-snippet replace. Zero matches is an error; more than one is an error unless <code>replace_all</code>.</td></tr><tr><td><code>run_command</code></td><td>Shell in the workspace root, 30&nbsp;s timeout, returns exit code plus stdout and stderr.</td></tr><tr><td><code>remember</code></td><td>Append one durable note to <code>memory.md</code>: deduped, capped, dated. The only write that outlives the run.</td></tr><tr><td><code>recall</code></td><td>Search the whole memory file on demand &mdash; the lazy half of the pair.</td></tr></tbody></table></div>
 <h3>The schema is the prompt</h3>
 
 <p>When the model chooses a tool it reads nothing but these descriptions. That makes them the highest-leverage
@@ -668,7 +679,7 @@ just wrote actually works. A tool that returned only stdout would let a failing 
 <section id="edit">
 <h2><span class="num">07</span><span>edit_file, the interesting one</span></h2>
 
-<p>Five of the six tools are obvious. <code>edit_file</code> is the one that teaches something, because it is
+<p>Seven of the eight tools are obvious. <code>edit_file</code> is the one that teaches something, because it is
 where an agent's output is most likely to be subtly wrong, and where good harness design turns that into a
 recoverable moment instead of a corrupted file.</p>
 <figure class="code"><figcaption><span>src/tools.js (condensed)</span><span class="lang">javascript</span></figcaption><pre>edit_file(ws, args) {
@@ -1007,8 +1018,138 @@ loop does not do is documentation, not an extension point. If you add a tenth, a
 
 </section>
 
+<section id="memory">
+<h2><span class="num">12</span><span>Long-term memory</span></h2>
+
+<p>Everything so far lives and dies inside one process. <code>messages</code> is the agent's working memory,
+and when the process exits it is gone &mdash; including the lessons that were expensive to learn ("the tests
+are offline", "this repo spells it Brighton", "force-push is refused"). Chapter 11 gave you a place to hang
+code on the loop. This chapter adds the smallest thing that actually persists: a markdown file, and two
+tools that read and write it.</p>
+<p>The store is <code>src/memory.md</code> &mdash; beside the code, not inside the sandbox, so you can open it in
+your editor and the agent can only reach it through <code>remember</code>. One bullet per memory, and the bullet
+<em>is</em> the record
+&mdash; no database, no index, no schema migration, nothing to migrate when you change your mind.</p>
+<figure class="code"><figcaption><span>src/memory.md</span><span class="lang">markdown</span></figcaption><pre># memory
+
+Long-term notes this agent keeps between runs. One bullet per memory:
+`- [tag] text _(YYYY-MM-DD)_` where tag is fact | pref | fix | gotcha.
+
+This file IS the store - edit it by hand, delete a wrong line, or commit it.
+The agent reads a bounded slice at the start of a run and can search the rest
+with the `recall` tool.
+
+- [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_</pre></figure>
+<p>Three consequences, all of them the point:</p>
+<ul><li><strong>No cache, no drift.</strong> Every method reads the file. A hand edit, a deletion or a
+    <code>git checkout</code> is picked up on the next call &mdash; there is no state that can disagree with the
+    text on disk. A memory module with a cache is a memory module that lies.</li><li><strong>It diffs like code.</strong> <code>src/memory.md</code> is a normal file in the repo: it appears
+    in <code>git status</code>, it diffs cleanly, and a memory can be reviewed or deleted in a pull request.
+    Point <code>MEMORY_FILE</code> at an absolute path to share one store across checkouts.</li><li><strong>You can audit it.</strong> <code>node src/agent.js --memory</code> prints the file and the exact block
+    the prompt received. "What does it remember about me?" is a <code>cat</code>, not an interrogation.</li></ul>
+<h3>Reading it: eager, then lazy</h3>
+
+<p>The two access paths cost different things, so the harness has both. <code>runTask</code> reads the file once
+and pastes a <em>bounded</em> slice into the system prompt; anything that did not fit is still one tool call
+away.</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Path</th><th>What it is</th><th>What it costs</th></tr></thead><tbody><tr><td><strong>eager</strong> &mdash; <code>digest()</code></td><td>The newest 12 entries, capped at 1200 characters, appended to the system prompt.</td><td>A fixed number of characters. It cannot grow with the file, so it cannot quietly eat the context window.</td></tr><tr><td><strong>lazy</strong> &mdash; <code>recall</code></td><td>A substring search over the whole file, when the model asks for it.</td><td>One tool call, and only when the task needs it.</td></tr></tbody></table></div>
+<p>The digest always ends by saying what it left out. That is the difference between "this is all I know" and
+"this is what fits &mdash; ask for the rest", and it is one line of code in <code>memory.js</code>:</p>
+<figure class="code"><figcaption><span>what the system prompt actually receives</span><span class="lang">text</span></figcaption><pre>## What you remember from earlier runs
+These notes live in memory.md and were learned before this task started.
+Treat them as strong hints, not facts to trust blindly: the code may have moved on since.
+- [gotcha] create_file refuses to overwrite, so re-running the demo fails at step 2. _(2026-10-24)_
+- [fix] The demo script lives at demo/hello.js; delete it before a clean demo run. _(2026-10-28)_
+- [pref] The user wants console output, not files, for anything under three lines. _(2026-10-28)_
+(9 older memories not shown - search memory.md with the recall tool)</pre></figure>
+<p>And the whole integration in the loop is four lines at the top of <code>runTask</code> &mdash; no new message
+role, no special channel, no vector store. Memory is text in the one message the model always receives:</p>
+<figure class="code"><figcaption><span>src/agent.js</span><span class="lang">javascript</span></figcaption><pre>const remembered = memory ? memory.digest() : '';
+const messages = [
+  { role: 'system', content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
+  { role: 'user', content: task },
+];
+const ctx = { workspace, commandPolicy, memory, confirm };</pre></figure>
+<h3>The code</h3>
+
+<p>Parsing is one regex, and anything that is not a tagged bullet is ignored &mdash; which is what makes prose,
+headings and comments safe in a file a human is meant to edit.</p>
+<figure class="code"><figcaption><span>src/memory.js</span><span class="lang">javascript</span></figcaption><pre>export function parseMemory(source) {
+  const entries = [];
+  for (const line of String(source ?? '').split(/\r?\n/)) {
+    // - [tag] text _(YYYY-MM-DD)_   (the date is optional for hand-written bullets)
+    const m = line.match(
+      /^\s*[-*]\s*\[([a-z]+)\]\s*(.+?)\s*(?:_\((\d{4}-\d{2}-\d{2})\)_)?\s*$/i,
+    );
+    if (!m) continue;
+    const text = normalise(m[2]);
+    if (!text) continue;
+    entries.push({ tag: m[1].toLowerCase(), text, date: m[3] ?? 'undated' });
+  }
+  return entries;
+}</pre></figure>
+<p>A write is where the bounds live. Duplicates are refreshed rather than appended (saying the same thing
+again is not new information), and the oldest entries are dropped so the file cannot grow without limit
+&mdash; the same argument as <code>maxSteps</code>, one level up.</p>
+<figure class="code"><figcaption><span>src/memory.js</span><span class="lang">javascript</span></figcaption><pre>remember(rawText, { tag = 'fact' } = {}) {
+  const text = normalise(rawText).slice(0, this.options.rememberChars);
+  const entry = {
+    tag,
+    text: text.slice(0, this.options.maxEntryChars),
+    date: today(this.now()),
+  };
+
+  const entries = this.entries();
+  const existing = entries.findIndex(
+    (e) =&gt; e.text.toLowerCase() === text.toLowerCase(),
+  );
+  if (existing !== -1) {          // the same note again: refresh the date
+    entries[existing] = { ...entries[existing], date: entry.date, tag: entry.tag };
+    this.save(entries);
+    return { ok: true, duplicate: true, entry: entries[existing], total: entries.length };
+  }
+
+  entries.push(entry);
+  // Bounded on purpose: the file cannot grow without limit, like maxSteps.
+  const dropped = Math.max(0, entries.length - this.options.maxEntries);
+  if (dropped) entries.splice(0, dropped);
+  this.save(entries);
+  return { ok: true, entry, dropped, total: entries.length };
+}</pre></figure>
+<h3>Writing it: one tool call, not one per turn</h3>
+
+<p><code>remember</code> is a normal tool, so a memory write appears in the transcript like everything else.
+Nothing writes automatically at the end of a run: a model that saved a memory every step would be filling
+your context with its own diary, and the system prompt says so in one line &mdash; durable facts only, never
+task progress.</p>
+<figure class="code"><figcaption><span>npm run demo, steps 11 and 12</span><span class="lang">text</span></figcaption><pre>── step 11/14 ────────────────────────────────────────
+think: Saving one durable fact, the way a later run would find it again:
+tool → remember {"text":"The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file.","tag":"fact"}
+result ← remembered in src/memory.md (3 total): - [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_
+
+── step 12/14 ────────────────────────────────────────
+think: Reading memory back the lazy way - the same file the system prompt was built from:
+tool → recall {"query":"demo"}
+result ← 1 of 3 memories in src/memory.md: - [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_</pre></figure>
+<p>Run the demo a second time and the harness says what it carried in, before step 1 &mdash; the write from the
+previous process is now context, not history:</p>
+<figure class="code"><figcaption><span>second run, same workspace</span><span class="lang">text</span></figcaption><pre>memory    : src/memory.md (2 memories, newest 2026-10-28)
+
+memory ← src/memory.md - 2 memories added to the system prompt</pre></figure>
+<h3>The caps</h3>
+
+<p>Every number below exists to keep memory from becoming a leak with a friendly name:</p>
+<div class="table-wrap"><table class=""><thead><tr><th>Knob</th><th>Default</th><th>What it bounds</th></tr></thead><tbody><tr><td><code>MEMORY_MAX_ENTRIES</code></td><td>60</td><td>the file &mdash; the oldest entries are dropped when it is reached</td></tr><tr><td><code>MEMORY_PROMPT_CHARS</code></td><td>1200</td><td>the injected block; <code>0</code> turns injection off and leaves <code>recall</code> working</td></tr><tr><td><code>maxEntryChars</code></td><td>300</td><td>one memory, so no single note can dominate</td></tr><tr><td><code>rememberChars</code></td><td>2000</td><td>one <code>remember</code> call</td></tr><tr><td><code>promptEntries</code></td><td>12</td><td>how many of the newest appear in the digest</td></tr></tbody></table></div>
+<p>That last combination is the interesting one: <code>MEMORY_PROMPT_CHARS=0</code> turns the harness from
+"stuff what fits" into "retrieve when needed", with no code change at all.</p>
+<div class="callout "><strong>What this is not.</strong> No embeddings, no vector search, no summarising, no write on every
+turn. It is one file a human can read, diff and delete a line from &mdash; which is why the answer to "why did
+it remember that?" is <code>node src/agent.js --memory</code> rather than a log hunt. Every real system grows
+past this; almost all of them start here.</div>
+</section>
+
 <section id="config">
-<h2><span class="num">12</span><span>Configuration and precedence</span></h2>
+<h2><span class="num">13</span><span>Configuration and precedence</span></h2>
 
 <p>Three sources compete for the key and the model name, and the winner is printed on every start with its
 provenance. The ladder is deliberately <em>not</em> the usual one:</p>
@@ -1032,7 +1173,7 @@ one level down:</p>
   }
 }</pre></figure>
 <h3>The knobs</h3>
-<div class="table-wrap"><table class=""><thead><tr><th>Variable</th><th>Default</th><th>What it does</th></tr></thead><tbody><tr><td><code>OPENROUTER_API_KEY</code> / <code>OPENROUTER_KEY</code></td><td>required</td><td>The key. Only ever printed as <code>sk-or...aaa5 (73 chars)</code>.</td></tr><tr><td><code>OPENROUTER_MODEL</code> / <code>MODEL</code></td><td><code>deepseek/deepseek-v4.1-flash-1017</code></td><td>Which model. <code>MODEL=</code> is an alias for older <code>.env</code> files in this repo.</td></tr><tr><td><code>CMD_POLICY</code></td><td><code>ask</code></td><td><code>allow</code> / <code>ask</code> / <code>deny</code>.</td></tr><tr><td><code>MAX_STEPS</code></td><td><code>12</code></td><td>How many model calls the loop may make.</td></tr><tr><td><code>REQUEST_TIMEOUT_MS</code></td><td><code>90000</code></td><td>Per-call transport timeout.</td></tr><tr><td><code>WORKSPACE_DIR</code></td><td><code>workspace</code></td><td>The sandbox root, resolved against the package.</td></tr></tbody></table></div>
+<div class="table-wrap"><table class=""><thead><tr><th>Variable</th><th>Default</th><th>What it does</th></tr></thead><tbody><tr><td><code>OPENROUTER_API_KEY</code> / <code>OPENROUTER_KEY</code></td><td>required</td><td>The key. Only ever printed as <code>sk-or...aaa5 (73 chars)</code>.</td></tr><tr><td><code>OPENROUTER_MODEL</code> / <code>MODEL</code></td><td><code>deepseek/deepseek-v4.1-flash-1017</code></td><td>Which model. <code>MODEL=</code> is an alias for older <code>.env</code> files in this repo.</td></tr><tr><td><code>CMD_POLICY</code></td><td><code>ask</code></td><td><code>allow</code> / <code>ask</code> / <code>deny</code>.</td></tr><tr><td><code>MAX_STEPS</code></td><td><code>12</code></td><td>How many model calls the loop may make.</td></tr><tr><td><code>REQUEST_TIMEOUT_MS</code></td><td><code>90000</code></td><td>Per-call transport timeout.</td></tr><tr><td><code>WORKSPACE_DIR</code></td><td><code>workspace</code></td><td>The sandbox root, resolved against the package.</td></tr><tr><td><code>MEMORY_FILE</code></td><td><code>src/memory.md</code></td><td>The long-term memory file, resolved against the package root (an absolute path points at a shared store).</td></tr><tr><td><code>MEMORY_MAX_ENTRIES</code></td><td><code>60</code></td><td>Hard cap on memories; the oldest are dropped at the limit.</td></tr><tr><td><code>MEMORY_PROMPT_CHARS</code></td><td><code>1200</code></td><td>Budget for the injected memory block; <code>0</code> disables injection and leaves <code>recall</code> working.</td></tr></tbody></table></div>
 <h3>Two small kindnesses</h3>
 <ul><li><strong>Fingerprinting instead of printing.</strong> <code>fingerprint()</code> returns
     <code>sk-or...aaa5 (73 chars)</code> &mdash; enough to tell two keys apart on stage, useless in a screenshot.</li><li><strong>Normalising bare model names.</strong> OpenRouter needs <code>vendor/model</code>, and a
@@ -1047,7 +1188,7 @@ one level down:</p>
 </section>
 
 <section id="bounds">
-<h2><span class="num">13</span><span>Bounded autonomy</span></h2>
+<h2><span class="num">14</span><span>Bounded autonomy</span></h2>
 
 <p>An agent that can loop is an agent that can loop forever. Four bounds cap it, and each one has a visible
 consequence rather than a silent stall.</p>
@@ -1078,18 +1219,19 @@ respects the model and one that argues with it.</div>
 </section>
 
 <section id="trace">
-<h2><span class="num">14</span><span>A real run, annotated</span></h2>
+<h2><span class="num">15</span><span>A real run, annotated</span></h2>
 
 <p>Everything on this page so far is description. This is a real run, captured from
 <code>node src/agent.js --demo</code> with colour disabled, unedited:</p>
 <figure class="code"><figcaption><span>terminal</span><span class="lang">console</span></figcaption><pre>min-coding-js
-workspace : C:\Users\mrcra\OneDrive\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-agent-js\workspace
+workspace : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\mini-coding-agent-js\workspace
 model     : scripted (no network)
 key       : -
-env file  : C:\Users\mrcra\OneDrive\Desktop\BrightonDev.ai-meetup-nov-2026\.env
+env file  : C:\Users\mrcra\Desktop\BrightonDev.ai-meetup-nov-2026\.env
 commands  : allow
 timeout   : 90s per model call
-tools     : list_files, read_file, create_file, write_file, edit_file, run_command
+tools     : list_files, read_file, create_file, write_file, edit_file, run_command, remember, recall
+memory    : src/memory.md (2 memories, newest 2026-10-28)
 hooks     : on: each of the 9 prints as [HOOK:name] - see --hooks, silence with --no-hooks
 
 task      : Show the loop, then try to break the sandbox: create a script, run it, edit it, run it again, then attempt a path escape, a home-folder read, a force push and an API-key echo.
@@ -1098,20 +1240,21 @@ task      : Show the loop, then try to break the sandbox: create a script, run i
   🛠️  [HOOK:PreToolUse] before every tool call - run_command {&quot;command&quot;:&quot;ls&quot;}
   (--no-hooks hides these; --hooks explains them)
 
+memory ← src/memory.md - 2 memories added to the system prompt
   🚀  [HOOK:SessionStart] once, before the first model call - Show the loop, then try to break the sandbox: create a script, run it, e
   ✍️  [HOOK:UserPromptSubmit] once, as the task enters the loop - Show the loop, then try to break the sandbox: create a script, run it, e
 
-── step 1/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 1/12 - 2 messages
+── step 1/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 1/14 - 2 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 1 - tool_calls
 think: Looking first: what is in the workspace, and what does the sandbox allow.
 tool → list_files {&quot;path&quot;:&quot;.&quot;}
   🛠️  [HOOK:PreToolUse] before every tool call - list_files {&quot;path&quot;:&quot;.&quot;}
-result ← .gitkeep  (72b)
-  📦  [HOOK:PostToolUse] after every tool call - list_files - .gitkeep  (72b)
+result ← .gitkeep  (71b)
+  📦  [HOOK:PostToolUse] after every tool call - list_files - .gitkeep  (71b)
 
-── step 2/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 2/12 - 4 messages
+── step 2/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 2/14 - 4 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 2 - tool_calls
 think: Creating a script, then running it to check it works.
 tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&quot;:&quot;const agent = &#x27;tiny agent&#x27;;\nconsole.log(`Hello from a ${agent}`);\n&quot;}
@@ -1119,8 +1262,8 @@ tool → create_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;content&q
 result ← created demo/hello.js (66 bytes)
   📦  [HOOK:PostToolUse] after every tool call - create_file - created demo/hello.js (66 bytes)
 
-── step 3/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 3/12 - 6 messages
+── step 3/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 3/14 - 6 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 3 - tool_calls
 think: Now run it - a real shell, a real exit code.
 tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
@@ -1129,8 +1272,8 @@ result ← exit code 0
          ↳ stdout: Hello from a tiny agent
   📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 
-── step 4/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 4/12 - 8 messages
+── step 4/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 4/14 - 8 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 4 - tool_calls
 think: Fixing the copy in the script.
 tool → edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&quot;:&quot;Hello from a ${agent}&quot;,&quot;new_string&quot;:&quot;Hello from a ${agent}, edited by a tool call&quot;}
@@ -1138,8 +1281,8 @@ tool → edit_file {&quot;path&quot;:&quot;demo/hello.js&quot;,&quot;old_string&
 result ← edited demo/hello.js: 1 replacement(s), first at line 2
   📦  [HOOK:PostToolUse] after every tool call - edit_file - edited demo/hello.js: 1 replacement(s), first at line 2
 
-── step 5/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 5/12 - 10 messages
+── step 5/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 5/14 - 10 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 5 - tool_calls
 think: Re-running to verify the edit.
 tool → run_command {&quot;command&quot;:&quot;node demo/hello.js&quot;}
@@ -1148,8 +1291,8 @@ result ← exit code 0
          ↳ stdout: Hello from a tiny agent, edited by a tool call
   📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 
-── step 6/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 6/12 - 12 messages
+── step 6/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 6/14 - 12 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 6 - tool_calls
 think: Now the guards. First a write that tries to climb out of the workspace:
 tool → write_file {&quot;path&quot;:&quot;../escape.txt&quot;,&quot;content&quot;:&quot;this file must never be written&quot;}
@@ -1157,8 +1300,8 @@ tool → write_file {&quot;path&quot;:&quot;../escape.txt&quot;,&quot;content&qu
 result ← ERROR: path escapes the workspace: ../escape.txt
   📦  [HOOK:PostToolUse] after every tool call - write_file - ERROR: path escapes the workspace: ../escape.txt
 
-── step 7/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 7/12 - 14 messages
+── step 7/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 7/14 - 14 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 7 - tool_calls
 think: Then a read from the home folder, where the private keys live:
 tool → read_file {&quot;path&quot;:&quot;~/.ssh/id_rsa&quot;}
@@ -1166,8 +1309,8 @@ tool → read_file {&quot;path&quot;:&quot;~/.ssh/id_rsa&quot;}
 result ← ERROR: absolute path is outside the workspace: ~/.ssh/id_rsa
   📦  [HOOK:PostToolUse] after every tool call - read_file - ERROR: absolute path is outside the workspace: ~/.ssh/id_rsa
 
-── step 8/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 8/12 - 16 messages
+── step 8/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 8/14 - 16 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 8 - tool_calls
 think: A command the deny-list refuses no matter what CMD_POLICY says:
 tool → run_command {&quot;command&quot;:&quot;git push --force origin main&quot;}
@@ -1175,8 +1318,8 @@ tool → run_command {&quot;command&quot;:&quot;git push --force origin main&quo
 result ← DENIED: blocked by policy (force push). Command: git push --force origin main
   📦  [HOOK:PostToolUse] after every tool call - run_command - DENIED: blocked by policy (force push). Command: git push --
 
-── step 9/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 9/12 - 18 messages
+── step 9/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 9/14 - 18 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 9 - tool_calls
 think: A command that asks its own child process for the API key:
 tool → run_command {&quot;command&quot;:&quot;node -e \&quot;console.log(&#x27;OPENROUTER_API_KEY=&#x27; + (process.env.OPENROUTER_API_KEY ?? &#x27;absent&#x27;))\&quot;&quot;}
@@ -1185,8 +1328,8 @@ result ← exit code 0
          ↳ stdout: OPENROUTER_API_KEY=absent
   📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 0
 
-── step 10/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 10/12 - 20 messages
+── step 10/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 10/14 - 20 messages
   💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 10 - tool_calls
 think: And a command that fails, so the exit code has to explain itself:
 tool → run_command {&quot;command&quot;:&quot;node -e \&quot;process.exit(1)\&quot;&quot;}
@@ -1195,15 +1338,33 @@ result ← exit code 1
          ↳ exit 1: general failure - the command ran and then reported an error (uncaught exception, failed assertion, bad argument). The cause is in stderr; fix that, do not just re-run.
   📦  [HOOK:PostToolUse] after every tool call - run_command - exit code 1
 
-── step 11/12 ────────────────────────────────────────
-  🧠  [HOOK:PreModel] before every model call - step 11/12 - 22 messages
-  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 11 - stop
+── step 11/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 11/14 - 22 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 11 - tool_calls
+think: Saving one durable fact, the way a later run would find it again:
+tool → remember {&quot;text&quot;:&quot;The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file.&quot;,&quot;tag&quot;:&quot;fact&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - remember {&quot;text&quot;:&quot;The sandbox demo script lives at demo/hello.js and
+result ← remembered in src/memory.md (3 total): - [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_
+  📦  [HOOK:PostToolUse] after every tool call - remember - remembered in src/memory.md (3 total): - [fact] The sandbox 
+
+── step 12/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 12/14 - 24 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 12 - tool_calls
+think: Reading memory back the lazy way - the same file the system prompt was built from:
+tool → recall {&quot;query&quot;:&quot;demo&quot;}
+  🛠️  [HOOK:PreToolUse] before every tool call - recall {&quot;query&quot;:&quot;demo&quot;}
+result ← 1 of 3 memories in src/memory.md: - [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_
+  📦  [HOOK:PostToolUse] after every tool call - recall - 1 of 3 memories in src/memory.md: - [fact] The sandbox demo 
+
+── step 13/14 ────────────────────────────────────────
+  🧠  [HOOK:PreModel] before every model call - step 13/14 - 26 messages
+  💬  [HOOK:PostModel] after every reply, before anything is dispatched - step 13 - stop
 think: Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
 
 ── final answer ──────────────────────────────────────
 Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, git push --force was denied by policy, the child process could not see the API key, and the failing command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.
-  🏁  [HOOK:Stop] the model answered and the loop is ending - 11 step(s) - Done. Created demo/hello.js, ran it, edited one string, 
-  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 498ms
+  🏁  [HOOK:Stop] the model answered and the loop is ending - 13 step(s) - Done. Created demo/hello.js, ran it, edited one string, 
+  🔒  [HOOK:SessionEnd] always - every run ends here, finished or not - ok (answer) in 413ms
 
 ── sandbox checks ────────────────────────────────────────────
   ✓ file tools stay inside the workspace - ERROR: path escapes the workspace
@@ -1231,13 +1392,17 @@ Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 bot
     access, <code>git push --force</code> is denied whatever the policy says, the child process cannot see the
     API key, and a failing command reports <code>exit code 1</code> with its meaning spelled out. The
     <code>sandbox checks</code> scorecard at the end is built from those same tool results &mdash; the run exits
-    non-zero if any guard regressed, so it is checkable rather than claimed.</li><li><strong>Step 11 has no <code>tool →</code> line.</strong> The model said it was done, the loop took the
+    non-zero if any guard regressed, so it is checkable rather than claimed.</li><li><strong>Steps 11 and 12 are the only writes that outlive the process.</strong> <code>remember</code> appends
+    one bullet to <code>memory.md</code> and says how many are now stored; <code>recall</code> searches the file
+    and finds it. Every other tool call in this run changed the workspace; those two changed what the
+    <em>next</em> run starts with, which is the whole of chapter 12. Note the <code>memory ←</code> line above
+    step 1: this capture is a second run, so the fact saved last time is already in the system prompt.</li><li><strong>Step 13 has no <code>tool →</code> line.</strong> The model said it was done, the loop took the
     <code>calls.length === 0</code> branch, printed the final answer and returned &mdash; firing
     <code>Stop</code> and <code>SessionEnd</code> on the way out (see chapter 11). That branch is the only way
     out other than hitting the limit.</li><li><strong>The banner was printed before the first step.</strong> Model, key fingerprint, which
-    <code>.env</code> won, the policy, the timeout, the tool list and the hook trace &mdash; the whole
-    configuration as one reproducible header, which is what you want when a demo goes wrong on
-    stage.</li><li><strong>Run it a second time and step 2 fails, and the run carries on.</strong> Now
+    <code>.env</code> won, the policy, the timeout, the tool list, how many memories are on disk and the hook
+    trace &mdash; the whole configuration as one reproducible header, which is what you want when a demo goes
+    wrong on stage.</li><li><strong>Run it a second time and step 2 fails, and the run carries on.</strong> Now
     <code>demo/hello.js</code> exists, so <code>create_file</code> refuses to clobber it and
     <code>edit_file</code> refuses to match an already-edited line. Both arrive as strings, the loop absorbs
     them, and the run still ends with an answer and a clean scorecard &mdash; principle 4 in action, and exactly
@@ -1245,7 +1410,7 @@ Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 bot
 </section>
 
 <section id="run">
-<h2><span class="num">15</span><span>Run it yourself</span></h2>
+<h2><span class="num">16</span><span>Run it yourself</span></h2>
 
 <p>Node 20+ and one <code>npm install</code>. The <code>.env</code> at the repository root is found
 automatically, so nothing has to be copied for a live run.</p>
@@ -1255,13 +1420,15 @@ npm install                       # one dependency: chalk
 npm start                         # live model, task typed at the &quot;task ›&quot; prompt
 npm start -- &quot;create hello.js that prints today&#x27;s date and time, run it, and save its output to hello-output.txt&quot;
 npm run demo                      # scripted run: no network, no key, no excuses
-npm test                          # 64 offline tests, no key, no network
+npm test                          # 80 offline tests, no key, no network
 
 node src/agent.js "task" --yes                # auto-approve commands
 node src/agent.js "task" --max-steps 6        # tighter loop
 node src/agent.js "task" --model anthropic/claude-sonnet-4.5
 node src/agent.js --hooks                     # the nine lifecycle hooks, in colour, then exit
 node src/agent.js "task" --no-hooks           # silence the [HOOK:...] trace lines
+node src/agent.js --memory                    # memory.md, and exactly what it injects
+node src/agent.js "task" --no-memory          # one run with nothing remembered
 node src/agent.js --help                      # usage summary</pre></figure>
 <p>The five-minute talk script is in the README: run <code>--demo</code> and narrate
 <em>think → tool → result → think</em>; delete <code>workspace/demo/hello.js</code> and run it live with
@@ -1269,38 +1436,42 @@ node src/agent.js --help                      # usage summary</pre></figure>
 result and the model repair it on the next iteration. With two minutes left, <code>--hooks</code> puts the
 lifecycle on screen &mdash; and every run you have just watched printed those same nine moments as
 <code>[HOOK:Name]</code> lines, so the slide and the console already agree. That is the "how would you extend
-this?" question, answered.</p>
+this?" question, answered. Then show memory as the second extension: run the demo again and point at the
+<code>memory ←</code> line before step 1, or run <code>--memory</code> to print the file and the block the
+prompt received. <code>--no-memory</code> gives you the amnesia run for comparison, in one flag.</p>
 <div class="callout "><strong>A demo that fails on purpose is worth two that succeed.</strong> The happy path shows what an
 agent does. The failure shows <em>why the loop matters</em>: it is the only structure that lets a model recover
 from being wrong, which is the thing no single completion can do.</div>
 </section>
 
 <section id="limits">
-<h2><span class="num">16</span><span>What it deliberately does not do</span></h2>
+<h2><span class="num">17</span><span>What it deliberately does not do</span></h2>
 
 <p>The limits are worth stating as plainly as the features, because each one is where a production agent grows a
 layer this demo does not have.</p>
 <ul><li><strong>The shell is not sandboxed.</strong> <code>run_command</code> starts in <code>workspace/</code> and
     can walk out of it. File tools are contained; commands are trusted as far as your policy allows.</li><li><strong>No context management.</strong> <code>messages</code> grows with every step and nothing trims it.
-    Long runs will eventually exceed the window &mdash; which is where summarising, retrieval and compaction
-    start to matter.</li><li><strong>No streaming.</strong> Each step waits for a complete reply, so the heartbeat exists to make the
-    wait legible. Streaming would delete that problem and add a parser.</li><li><strong>No sub-agents, no retries, no skills, no memory.</strong> Every one of those is a layer on top of
-    this loop, not a replacement for it, and all of them assume the loop already works. The one extension point
-    that <em>is</em> here is the hooks in chapter 11 &mdash; nine events, no config file, no plugin loader.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
+    Long runs will eventually exceed the window &mdash; which is where summarising and compaction start to
+    matter. The memory digest is bounded; the conversation is not.</li><li><strong>No streaming.</strong> Each step waits for a complete reply, so the heartbeat exists to make the
+    wait legible. Streaming would delete that problem and add a parser.</li><li><strong>No sub-agents, no retries, no skills.</strong> Every one of those is a layer on top of this loop, not
+    a replacement for it, and all of them assume the loop already works. What <em>is</em> here is the hooks in
+    chapter 11 (nine events, no config file, no plugin loader) and the memory in chapter 12.</li><li><strong>Memory is one markdown file with substring search.</strong> No embeddings, no vector store, no
+    automatic summarising, no write on every turn. It is the smallest thing that actually persists &mdash; and
+    the honest answer to "why did it remember that?" is <code>node src/agent.js --memory</code>.</li><li><strong>One tool at a time in spirit.</strong> Multiple calls in a single reply are dispatched in order, but
     the system prompt asks for one per step because interleaved edits are much harder to audit live.</li></ul>
-<h3>The nine principles, in one place</h3>
-<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Principle</th><th>Where to see it</th></tr></thead><tbody><tr><td>1</td><td>Tool calling is the model's only ability to act.</td><td><code>src/tools.js</code> &mdash; the schemas are the prompt</td></tr><tr><td>2</td><td>The loop is the agent.</td><td><code>runTask</code>, <code>agent.js:88</code></td></tr><tr><td>3</td><td>Everything is messages.</td><td>one array, four roles, no other state</td></tr><tr><td>4</td><td>Errors are observations, not crashes.</td><td><code>runTool</code>'s try/catch, <code>edit_file</code>'s errors, a blocked <code>PreToolUse</code></td></tr><tr><td>5</td><td>Exit codes close the loop.</td><td><code>exit code 0</code> versus <code>1</code> in the result string</td></tr><tr><td>6</td><td>Human in the loop.</td><td><code>CMD_POLICY=ask</code>, plus the hard-deny list</td></tr><tr><td>7</td><td>Least privilege.</td><td><code>Workspace.resolve()</code>, the child-process env allow-list</td></tr><tr><td>8</td><td>Bounded autonomy.</td><td><code>maxSteps</code>, the truncation guard, both timeouts</td></tr><tr><td>9</td><td>Extension points belong at named moments.</td><td><code>src/hooks.js</code> &mdash; nine events, called by the loop, never edited into it</td></tr></tbody></table></div>
-<p>That is the whole of it: a model, six tools, a loop with four bounds, nine lifecycle hooks, and a sandbox. Everything else you have
+<h3>The ten principles, in one place</h3>
+<div class="table-wrap"><table class=""><thead><tr><th>#</th><th>Principle</th><th>Where to see it</th></tr></thead><tbody><tr><td>1</td><td>Tool calling is the model's only ability to act.</td><td><code>src/tools.js</code> &mdash; the schemas are the prompt</td></tr><tr><td>2</td><td>The loop is the agent.</td><td><code>runTask</code>, <code>agent.js:88</code></td></tr><tr><td>3</td><td>Everything is messages.</td><td>one array, four roles, no other state</td></tr><tr><td>4</td><td>Errors are observations, not crashes.</td><td><code>runTool</code>'s try/catch, <code>edit_file</code>'s errors, a blocked <code>PreToolUse</code></td></tr><tr><td>5</td><td>Exit codes close the loop.</td><td><code>exit code 0</code> versus <code>1</code> in the result string</td></tr><tr><td>6</td><td>Human in the loop.</td><td><code>CMD_POLICY=ask</code>, plus the hard-deny list</td></tr><tr><td>7</td><td>Least privilege.</td><td><code>Workspace.resolve()</code>, the child-process env allow-list</td></tr><tr><td>8</td><td>Bounded autonomy.</td><td><code>maxSteps</code>, the truncation guard, both timeouts, every memory cap</td></tr><tr><td>9</td><td>Extension points belong at named moments.</td><td><code>src/hooks.js</code> &mdash; nine events, called by the loop, never edited into it</td></tr><tr><td>10</td><td>Memory is a file, not a mystery.</td><td><code>src/memory.js</code> &mdash; <code>memory.md</code>, a bounded digest, and <code>recall</code></td></tr></tbody></table></div>
+<p>That is the whole of it: a model, eight tools, a loop with four bounds, nine lifecycle hooks, one memory file and a sandbox. Everything else you have
 seen a coding agent do is built from these pieces &mdash; and now you know what each piece costs.</p>
 
 </section>
 
       <p class="colophon">
         Built from the source in <code>mini-coding-js/</code> &mdash; every excerpt is real code with only the
-        logging lines trimmed and long lines rewrapped to fit, and the run in chapter 14 is a captured terminal
+        logging lines trimmed and long lines rewrapped to fit, and the run in chapter 15 is a captured terminal
         session.
-        Tests: <code>npm test</code> (64 offline, no key, no network). Demo: <code>npm run demo</code>.
-        Hooks: <code>npm run hooks</code>.
+        Tests: <code>npm test</code> (80 offline, no key, no network). Demo: <code>npm run demo</code>.
+        Hooks: <code>npm run hooks</code>. Memory: <code>node src/agent.js --memory</code>.
       </p>
     </div>
   </main>

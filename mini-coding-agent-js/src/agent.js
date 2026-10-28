@@ -8,6 +8,7 @@ import { Workspace } from './workspace.js';
 import { loadConfig, fingerprint } from './config.js';
 import { ui } from './ui.js';
 import { Hooks, traceHooks, printHookCatalogue, HOOK_EVENTS } from './hooks.js';
+import { Memory } from './memory.js';
 
 const SYSTEM_PROMPT = `You are a small coding agent working inside a sandboxed folder.
 
@@ -19,6 +20,7 @@ How to work:
 3. Every edit must use an old_string copied exactly from read_file output.
 4. Run what you wrote with run_command and check the exit code. If it fails, read the error, fix it, run again.
 5. Do not invent tool results. Stop calling tools when the task is done and reply with a short summary of what you changed.
+6. If you learn something that will still be true next week - a command this repo needs, a preference the user stated, a trap you fell into - save it with remember. Never save task progress: "step 3 of 5" is not a memory, and it is worthless to the next run.
 
 Be concise. One tool call per step where possible.`;
 
@@ -45,17 +47,30 @@ function heartbeat(log, everyMs = 5000) {
  */
 export async function runTask({
   task, workspace, commandPolicy, maxSteps, chatFn, confirm,
-  hooks = null, log = console.log, heartbeatMs = 5000,
+  hooks = null, memory = null, log = console.log, heartbeatMs = 5000,
 }) {
   const started = Date.now();
   const hook = hooks ?? new Hooks();
+
+  // Long-term memory, read ONCE and pasted into the system prompt. This is the
+  // whole trick: memory is not a special channel or a vector database, it is a
+  // bounded block of text in the one message the model always receives. What
+  // does not fit is still in the file, one `recall` call away - which is why
+  // the digest ends with a line saying what it left out.
+  const remembered = memory ? memory.digest() : '';
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
     { role: 'user', content: task },
   ];
+  if (remembered) {
+    const injected = remembered.split('\n').filter((line) => line.startsWith('- [')).length;
+    log(ui.memory(`${memory.label} - ${injected} ${injected === 1 ? 'memory' : 'memories'} added to the system prompt`));
+  }
+
   const ctx = {
     workspace,
     commandPolicy,
+    memory,
     confirm: confirm ?? (async () => 'deny'),
   };
   const durationMs = () => Date.now() - started;
@@ -226,6 +241,19 @@ export const DEMO_SCRIPT = [
     content: 'And a command that fails, so the exit code has to explain itself:',
     tool_calls: [call('s10', 'run_command', { command: 'node -e "process.exit(1)"' })],
   },
+
+  // ---- the only two steps whose effect survives this process ---------
+  {
+    content: 'Saving one durable fact, the way a later run would find it again:',
+    tool_calls: [call('s11', 'remember', {
+      text: 'The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file.',
+      tag: 'fact',
+    })],
+  },
+  {
+    content: 'Reading memory back the lazy way - the same file the system prompt was built from:',
+    tool_calls: [call('s12', 'recall', { query: 'demo' })],
+  },
   {
     content: 'Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). '
       + 'Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, '
@@ -311,6 +339,7 @@ function parseArgs(argv) {
   const opts = {
     task: '', demo: false, model: undefined, maxSteps: undefined, policy: undefined,
     yes: false, showHooks: false, traceHooks: false, noHooks: false,
+    showMemory: false, noMemory: false,
   };
   const words = [];
   for (let i = 0; i < argv.length; i += 1) {
@@ -321,6 +350,8 @@ function parseArgs(argv) {
     else if (a === '--max-steps') opts.maxSteps = Number(argv[++i]);
     else if (a === '--allow-commands') opts.policy = 'allow';
     else if (a === '--hooks') opts.showHooks = true;
+    else if (a === '--memory') opts.showMemory = true;
+    else if (a === '--no-memory') opts.noMemory = true;
     else if (a === '--trace-hooks') opts.traceHooks = true;
     else if (a === '--no-hooks') opts.noHooks = true;
     else if (a === '--help' || a === '-h') opts.help = true;
@@ -343,9 +374,12 @@ ${ui.title('min-coding-js')} ${ui.dim('- a small coding agent in Node')}
   node src/agent.js "..." --model anthropic/claude-sonnet-4.5
   node src/agent.js --hooks                  the lifecycle: every hook, icon, colour, why
   node src/agent.js "..." --no-hooks         hide the [HOOK:...] lines (they are on by default)
+  node src/agent.js --memory                 print memory.md and exactly what it injects, then exit
+  node src/agent.js "..." --no-memory        run with no long-term memory at all
 
 ${ui.warn('Env: OPENROUTER_API_KEY, OPENROUTER_MODEL, CMD_POLICY=allow|ask|deny, MAX_STEPS, REQUEST_TIMEOUT_MS')}
-Files are confined to ./workspace. Run "npm test" for the offline test suite.
+${ui.warn('     MEMORY_FILE=src/memory.md, MEMORY_MAX_ENTRIES=60, MEMORY_PROMPT_CHARS=1200')}
+Files are confined to ./workspace; long-term memory lives in ./src/memory.md. Run "npm test" for the offline test suite.
 
 Exit codes:
   0  finished - the model gave a final answer
@@ -372,6 +406,18 @@ async function runCli() {
 
   const config = loadConfig({ model: opts.model });
   const workspace = new Workspace(config.workspaceRoot);
+  const memory = new Memory({
+    // root = the package, so the label reads "src/memory.md" rather than an
+    // absolute path. The file itself comes from config and may be absolute.
+    root: config.projectRoot,
+    file: config.memoryFile,
+    maxEntries: config.memoryMaxEntries,
+    promptChars: config.memoryPromptChars,
+  });
+
+  // "What does it remember?" is answered by printing a markdown file, not by
+  // asking a model. That is the point of keeping memory in a file you can diff.
+  if (opts.showMemory) return showMemory(memory, config);
 
   // The scripted demo runs a fixed list of harmless commands (verifying its own
   // scratch file), so it may auto-approve; live runs keep the ask policy.
@@ -387,6 +433,7 @@ async function runCli() {
   kv('commands', commandPolicy);
   kv('timeout', `${Math.round(config.requestTimeoutMs / 1000)}s per model call`);
   kv('tools', TOOL_NAMES.join(', '));
+  kv('memory', opts.noMemory ? 'off (--no-memory)' : memory.summary());
   kv('hooks', opts.noHooks
     ? `${HOOK_EVENTS.length} available, not printed (--no-hooks)`
     : `on: each of the ${HOOK_EVENTS.length} prints as [HOOK:name] - see --hooks, silence with --no-hooks`);
@@ -449,6 +496,7 @@ async function runCli() {
     chatFn,
     confirm: makeConfirm(),
     hooks,
+    memory: opts.noMemory ? null : memory,
   });
 
   if (!result.ok && result.reason === 'request_failed') process.exitCode = 1;
@@ -456,6 +504,40 @@ async function runCli() {
 
   // The demo claims the guards hold, so check them against what actually ran.
   if (opts.demo) reportSandbox(result.messages);
+}
+
+/**
+ * `--memory`: print the store, and exactly what the model is told about it.
+ * Two numbers matter on stage - how many memories exist, and how many characters
+ * of them the system prompt actually receives.
+ */
+function showMemory(memory, config) {
+  const entries = memory.entries();
+  const digest = memory.digest();
+  const injected = digest ? digest.split('\n').filter((line) => line.startsWith('- [')).length : 0;
+
+  console.log(ui.title('\nmin-coding-js · memory'));
+  console.log(ui.kv('file', memory.file));
+  console.log(ui.kv('exists', memory.exists ? 'yes' : 'no - nothing remembered yet'));
+  console.log(ui.kv('entries', `${entries.length} (cap ${config.memoryMaxEntries}, 300 chars each)`));
+  console.log(ui.kv('injected', config.memoryPromptChars === 0
+    ? 'nothing - MEMORY_PROMPT_CHARS=0, the recall tool still works'
+    : `${injected} newest, ${digest.length} of ${config.memoryPromptChars} chars`));
+
+  if (digest) {
+    console.log('');
+    console.log(ui.rule('what the system prompt gets'));
+    console.log(ui.dim(digest));
+  }
+  if (entries.length) {
+    console.log('');
+    console.log(ui.rule(`the whole file - ${memory.label}`));
+    console.log(ui.dim(fs.readFileSync(memory.file, 'utf8').trim()));
+  }
+  console.log('');
+  console.log(ui.dim('  The model writes to it with the remember tool and searches it with recall;'));
+  console.log(ui.dim('  you can edit or delete any line by hand. --no-memory turns it off for a run.'));
+  console.log('');
 }
 
 /** Print which sandbox guards the demo exercised, and whether each one held. */

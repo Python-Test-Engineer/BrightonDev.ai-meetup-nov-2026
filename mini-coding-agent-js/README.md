@@ -4,9 +4,9 @@ A coding agent in plain Node, built to show what an agent actually is: **an LLM 
 a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
 draws the coloured output.
 
-The loop itself is one ~500-line file (`src/agent.js`); the tools, the sandbox, the
-config, the console theme and the lifecycle hooks bring `src/` to ~1700 lines. Small
-enough to read on a projector during a talk.
+The loop itself is one ~600-line file (`src/agent.js`); the tools, the sandbox, the
+config, the console theme, the lifecycle hooks and long-term memory bring `src/` to
+~2150 lines. Small enough to read on a projector during a talk.
 
 ```
         ┌─────────────┐
@@ -51,6 +51,9 @@ flag beats both.
 | `MAX_STEPS` | `12` | ReAct iterations before the loop stops and summarises |
 | `REQUEST_TIMEOUT_MS` | `90000` | per model call, so a stalled request fails instead of hanging |
 | `WORKSPACE_DIR` | `workspace` | the only folder the file tools may read and write |
+| `MEMORY_FILE` | `src/memory.md` | the long-term memory file, relative to the package root (an absolute path points at a shared store) |
+| `MEMORY_MAX_ENTRIES` | `60` | hard cap on memories; the oldest are dropped when it is reached |
+| `MEMORY_PROMPT_CHARS` | `1200` | budget for the block of memory injected into the system prompt; `0` disables injection (`recall` still works) |
 
 | Flag | Overrides |
 |---|---|
@@ -59,6 +62,8 @@ flag beats both.
 | `--yes` / `-y` / `--allow-commands` | `CMD_POLICY=allow` |
 | `--demo` | nothing — scripted run, no network, no key needed |
 | `--hooks` | nothing — prints every lifecycle hook (icon, colour, description) and exits |
+| `--memory` | nothing — prints `src/memory.md` and the exact block it injects, then exits |
+| `--no-memory` | nothing — one run with no long-term memory |
 | `--no-hooks` | nothing — silences the `[HOOK:…]` trace lines (they print by default) |
 | `--trace-hooks` | nothing — the explicit spelling of the default; harmless |
 
@@ -95,8 +100,10 @@ node src/agent.js "task" --max-steps 6        # tighter loop
 node src/agent.js "task" --model anthropic/claude-sonnet-4.5
 node src/agent.js --hooks                     # the lifecycle: every hook, icon, colour, why
 node src/agent.js "task" --no-hooks           # silence the [HOOK:...] trace lines
+node src/agent.js --memory                    # the memory store, and exactly what it injects
+node src/agent.js "task" --no-memory          # one run with nothing remembered
 node src/agent.js --help                      # usage summary
-npm test                                      # 64 offline tests
+npm test                                      # 80 offline tests
 ```
 
 `--model` beats `.env`, which beats your shell (next section). A bare model name
@@ -130,7 +137,8 @@ key       : sk-or...aaa5 (73 chars) from .env
 env file  : ...\BrightonDev.ai-meetup-nov-2026\.env
 commands  : ask
 timeout   : 90s per model call
-tools     : list_files, read_file, create_file, write_file, edit_file, run_command
+tools     : list_files, read_file, create_file, write_file, edit_file, run_command, remember, recall
+memory    : src/memory.md (2 memories, newest 2026-10-28)
 ```
 
 The key itself is never printed: only its first 5 and last 4 characters.
@@ -143,14 +151,16 @@ vendor with `OPENROUTER_PROVIDER_PREFIX=...` if the guess is wrong.
 
 | File | Lines | What it shows |
 |---|---|---|
-| `src/agent.js` | ~500 | the ReAct loop and its nine hook call sites, system prompt, CLI, input field, heartbeat, scripted demo + sandbox scorecard |
-| `src/tools.js` | ~350 | tool schemas the model reads + the dispatcher, the deny-list and the env allow-list |
+| `src/agent.js` | ~590 | the ReAct loop and its nine hook call sites, system prompt, CLI, input field, heartbeat, scripted demo + sandbox scorecard |
+| `src/tools.js` | ~415 | tool schemas the model reads + the dispatcher, the deny-list and the env allow-list |
 | `src/hooks.js` | ~390 | the lifecycle: nine named moments, the registry, the `--hooks` catalogue and the live trace |
-| `src/config.js` | ~170 | `.env` discovery and loading, model + policy config |
+| `src/memory.js` | ~245 | long-term memory: `memory.md` as the store, the bounded digest for the prompt, search, dedupe and caps |
+| `src/config.js` | ~190 | `.env` discovery and loading, model + policy + memory config |
 | `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
-| `src/ui.js` | ~145 | the console palette (including every hook colour), plus the plain-English meaning of each exit code |
+| `src/ui.js` | ~150 | the console palette (including every hook colour), plus the plain-English meaning of each exit code |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
-| `test/` | ~990 | offline tests for the loop, the hooks, the demo's sandbox checks, the config, the tools, the palette, the input field, the HTTP timeout and the path resolver |
+| `test/` | ~1230 | offline tests for the loop, the hooks, the demo's sandbox checks, the config, the tools, memory, the palette, the input field, the HTTP timeout and the path resolver |
+| `src/memory.md` | - | the long-term memory store: markdown, one bullet per memory, readable and editable by hand |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
 
 ## Coloured output
@@ -176,6 +186,7 @@ think: (text) => `${chalk.cyan('think:')} ${text}`
 | `↳ exit N: ...` under a failure | dim - what that exit code means in English |
 | sandbox scorecard (`✓` / `✗`, `── sandbox checks ──`) | green / red checks, magenta heading |
 | lifecycle hook trace (`[HOOK:Name] …`) | each hook's own colour (cyan `SessionStart`, bright yellow `PreToolUse`, green `PostToolUse`, red `SessionEnd`), icons in the margin; on by default |
+| `memory ←` (what was carried into this run) | magenta label, white detail |
 | final answer heading | bold green |
 | warnings | bright yellow |
 | failures | red |
@@ -187,7 +198,9 @@ a string, so `runTask` still accepts an injected `log`. chalk also decides when
 not to colour - a pipe, `NO_COLOR`, or `FORCE_COLOR` are all honoured, so
 redirecting a run to a file gives clean text.
 
-## The six tools
+## The eight tools
+
+Six of them change the workspace. Two change what the *next* process knows about it.
 
 | Tool | Behaviour |
 |---|---|
@@ -197,6 +210,8 @@ redirecting a run to a file gives clean text.
 | `write_file` | create or overwrite a whole file |
 | `edit_file` | exact-snippet replace; 0 matches = error, >1 = error unless `replace_all` |
 | `run_command` | shell in the workspace root, 30 s timeout, output capped at 6000 chars, `env` allow-listed, returns `exit code N` + streams |
+| `remember` | append one durable note to `src/memory.md` (deduped, capped, dated) - survives the process |
+| `recall` | search the whole memory file; the injected digest is only the newest few |
 
 ## Lifecycle hooks
 
@@ -315,6 +330,121 @@ The trace at the top of this section is that mechanism at work: one observer per
 event, registered by `traceHooks()`. The CLI attaches it by default - a `Hooks`
 with nine observers, passed to `runTask` - and `--no-hooks` leaves it off.
 
+## Long-term memory
+
+`messages` is the agent's memory *within* a run and nothing more. Kill the process
+and everything it learned is gone — including the expensive lessons ("the tests are
+offline", "this repo spells it `Brighton`", "`git push --force` is refused"). A real
+harness keeps a small file and puts a bounded slice of it in front of the model at
+the start of the next run. That file is `src/memory.md` — beside the code, not inside the
+sandbox, so you can open it in your editor and the agent can only reach it through the
+`remember` tool. `src/memory.js` is the ~245 lines that read and write it.
+
+```bash
+npm start                      # a run starts by injecting the newest memories
+node src/agent.js --memory     # the file, and exactly what the prompt gets
+node src/agent.js "..." --no-memory   # amnesia, for one run
+```
+
+The store is markdown, one bullet per memory, and the bullet *is* the record:
+
+```markdown
+# memory
+
+Long-term notes this agent keeps between runs. One bullet per memory:
+`- [tag] text _(YYYY-MM-DD)_` where tag is fact | pref | fix | gotcha.
+
+This file IS the store - edit it by hand, delete a wrong line, or commit it.
+The agent reads a bounded slice at the start of a run and can search the rest
+with the `recall` tool.
+
+- [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_
+```
+
+Three things follow from "the file is the store", and all three are deliberate:
+
+1. **No cache, no index, no drift.** Every method reads the file. A hand edit, a
+   deletion or a `git checkout` is picked up by the next call — there is no state
+   that can disagree with the text on disk.
+2. **It diffs like code.** `src/memory.md` is a normal file in the repo: it shows up in
+   `git status`, it diffs cleanly, and a memory can be reviewed or deleted in a pull
+   request. Point `MEMORY_FILE` at an absolute path to share one store across checkouts.
+3. **You can audit it.** `--memory` prints the file and the injected block, so
+   "what does it remember about me?" is a `cat`, not an interrogation.
+
+There are two access paths, because they cost different things:
+
+| Path | What it is | Cost |
+|---|---|---|
+| **eager** — `digest()` | the newest 12 entries, capped at 1200 chars, appended to the system prompt by `runTask` | fixed: it cannot grow with the file, so it cannot eat the context window |
+| **lazy** — `recall` | a search over the whole file, on demand | one tool call, only when needed |
+
+The digest always ends by saying what it left out, which is the difference between
+"this is all I know" and "this is what fits — ask for the rest":
+
+```
+## What you remember from earlier runs
+These notes live in src/memory.md and were learned before this task started.
+Treat them as strong hints, not facts to trust blindly: the code may have moved on since.
+- [gotcha] create_file refuses to overwrite, so re-running the demo fails at step 2. _(2026-10-24)_
+- [fix] The demo script lives at demo/hello.js; delete it before a clean demo run. _(2026-10-28)_
+- [pref] The user wants console output, not files, for anything under three lines. _(2026-10-28)_
+(9 older memories not shown - search src/memory.md with the recall tool)
+```
+
+```js
+// agent.js - the whole integration, at the top of runTask
+const remembered = memory ? memory.digest() : '';
+const messages = [
+  { role: 'system', content: remembered ? `${SYSTEM_PROMPT}\n\n${remembered}` : SYSTEM_PROMPT },
+  { role: 'user', content: task },
+];
+const ctx = { workspace, commandPolicy, memory, confirm };
+```
+
+```js
+// memory.js - a write is deduped, capped and dated, then the file is rewritten
+remember(rawText, { tag = 'fact' } = {}) {
+  const text = normalise(rawText).slice(0, this.options.rememberChars);
+  const entry = { tag, text, date: today(this.now()) };
+
+  const entries = this.entries();
+  const key = text.toLowerCase();
+  const existing = entries.findIndex((e) => e.text.toLowerCase() === key);
+  if (existing !== -1) {                      // same note again: refresh the date
+    entries[existing] = { ...entries[existing], date: entry.date, tag: entry.tag };
+    this.save(entries);
+    return { ok: true, duplicate: true, entry: entries[existing], total: entries.length };
+  }
+
+  entries.push(entry);
+  const dropped = Math.max(0, entries.length - this.options.maxEntries);  // bounded, like maxSteps
+  if (dropped) entries.splice(0, dropped);
+  this.save(entries);
+  return { ok: true, entry, dropped, total: entries.length };
+}
+```
+
+A write from the model looks like this in the console, and the second run of the
+same demo says `already remembered` instead of adding a duplicate:
+
+```
+tool → remember {"text":"The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file.","tag":"fact"}
+result ← remembered in src/memory.md (3 total): - [fact] The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file. _(2026-10-28)_
+```
+
+The caps are the same argument as `maxSteps`, one level up: an unbounded memory file
+is a context leak with a friendly name. `MEMORY_MAX_ENTRIES` (60) drops the oldest,
+`MEMORY_PROMPT_CHARS` (1200) bounds the injection, 300 chars bound one entry, and
+`MEMORY_PROMPT_CHARS=0` turns injection off while leaving `recall` working — which is
+exactly the "retrieval instead of stuffing" trade-off, available as an env var.
+
+What memory here is *not*: no embeddings, no vector search, no summarising, no write
+on every turn. A model that writes a memory every step is a model filling your
+context with its own diary. The system prompt says it plainly — durable facts only,
+never task progress — and `remember` is a deliberate tool call, so it shows up in the
+transcript like everything else.
+
 ## The AI principles it demonstrates
 
 1. **Tool calling is the model's only ability to act.** The model cannot touch a
@@ -346,6 +476,10 @@ with nine observers, passed to `runTask` - and `--no-hooks` leaves it off.
    (`SessionStart` … `SessionEnd`) and the loop calls all nine. Your code never
    edits the loop, and a hook that misbehaves is reported rather than fatal: that is
    the shape every real agent harness grows, at a size you can read in one sitting.
+10. **Memory is a file, not a mystery.** `src/memory.js` keeps `memory.md`, injects a
+    bounded slice of it into the system prompt and lets the model search the rest
+    with `recall`. Durable facts only, capped in three places, identical across runs
+    and readable by a human — the opposite of a stateful service you cannot inspect.
 
 ## Deliberate limits
 
@@ -353,11 +487,16 @@ with nine observers, passed to `runTask` - and `--no-hooks` leaves it off.
   out of that folder. The directory is not an OS sandbox - use a container if you
   need actual isolation.
 - No context management: long runs will eventually exceed the model's window
-  (each request is capped at `max_tokens: 2048`).
-- No streaming, no sub-agents, no retries, no skills, no memory - all of those are
-  layers on top of this loop, not replacements for it. `src/hooks.js` is the one
-  extension point that IS here, and it is deliberately small: nine events, no
-  configuration file, no plugin loading.
+  (each request is capped at `max_tokens: 2048`). The memory digest is bounded, but
+  the `messages` array is not.
+- No streaming, no sub-agents, no retries, no skills - all of those are layers on
+  top of this loop, not replacements for it. `src/hooks.js` is the one extension
+  point that IS here, and it is deliberately small: nine events, no configuration
+  file, no plugin loading.
+- Memory is one markdown file with substring search: no embeddings, no vector
+  store, no automatic summarising, no write on every turn. It is the smallest thing
+  that actually persists - and the honest answer to "why did it remember that?" is
+  `node src/agent.js --memory`.
 - With no TTY (piped input, CI) the `ask` policy degrades to deny: an unanswerable
   prompt never becomes an approval.
 
@@ -384,16 +523,26 @@ With two minutes left, `node src/agent.js --hooks` puts the lifecycle on screen
 watched printed the same nine as `[HOOK:Name]` lines, so the slide and the console
 already agree. That is the "how would you extend this?" question, answered.
 
+Then run the demo a second time: the banner says how many memories are on disk and a
+`memory ← src/memory.md - 2 memories added to the system prompt` line appears before step 1,
+because the `remember` call from the previous run outlived the process.
+`node src/agent.js --memory` prints the file and the exact block the prompt received;
+`--no-memory` gives you the amnesia run for comparison.
+
 ## Tests
 
 ```bash
 npm test        # node --test: offline, no key, no network
 ```
 
-64 tests cover the loop (including truncation and the max-steps stop), the lifecycle
+80 tests cover the loop (including truncation and the max-steps stop), the lifecycle
 hooks (every event documented, blocking, replacing, a throwing hook, the order a run
 fires them in), the scripted demo's sandbox checks, `.env` discovery and precedence,
 every tool's failure modes, the child-process env allow-list, the path resolver's
 escape attempts, the palette (tag escaping, backslashes, red results, exit-code
 explanations, the hook colours) and the input field (trimming, blank-line re-prompt,
-closed input).
+closed input) - and long-term memory: a note surviving a second process, dedupe with a
+refreshed date, the entry cap dropping the oldest, per-entry truncation, the digest
+staying inside its character budget and saying what it hid, injection disabled by
+`MEMORY_PROMPT_CHARS=0`, AND-search ordering, `forget`, hand-edited bullet parsing, an
+absolute `MEMORY_FILE`, and the `remember`/`recall` tools with and without a store.

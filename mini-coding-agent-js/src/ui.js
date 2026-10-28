@@ -137,6 +137,8 @@ export const ui = {
   hookFlow: (steps = []) => (Array.isArray(steps) ? steps : [steps])
     .map((s, i) => `  ${chalk.dim(`${i + 1}.`)} ${chalk.white(s)}`)
     .join('\n'),
+  /** what long-term memory carried into this run (see memory.js) */
+  memory: (text) => `${chalk.magenta('memory ←')} ${chalk.white(text)}`,
   /** the last line of a failed run: the process exit code and what it means */
   exitNote: (code, meaning) => `${chalk.red(`exit code ${code}`)}${meaning ? ` ${chalk.dim(`- ${meaning}`)}` : ''}`,
   answerRule: () => chalk.bold.green(`── final answer ${'─'.repeat(38)}`),

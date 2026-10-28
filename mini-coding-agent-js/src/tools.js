@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { PathError } from './workspace.js';
+import { formatEntry } from './memory.js';
 
 /* ------------------------------------------------------------------ *
  * Schemas: exactly what the model sees. Descriptions are prompt text,
@@ -101,6 +102,40 @@ export const TOOL_SCHEMAS = [
           command: { type: 'string', description: 'Command line, e.g. "node hello.js" or "ls -la"' },
         },
         required: ['command'],
+        additionalProperties: false,
+      },
+    },
+  },
+  // The last two are the only tools whose effect outlives the run. Everything
+  // else changes the workspace; these change what the NEXT process knows about
+  // it. See memory.js - memory.md is the store.
+  {
+    type: 'function',
+    function: {
+      name: 'remember',
+      description: 'Save a durable note to memory.md so a future run can use it. Use it for facts about this project that will still be true next week (how to run the tests, a command the sandbox refuses, a naming rule) or a preference the user stated. Do NOT save task progress, file contents, or anything you would not want quoted back at you later.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'The memory, in one self-contained sentence - it will be read with no other context' },
+          tag: { type: 'string', description: 'fact (default), pref (a user preference), fix (something that went wrong, and how it was fixed) or gotcha (a trap in this repo)' },
+        },
+        required: ['text'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall',
+      description: 'Search memory.md for notes saved by earlier runs. The newest few are already in your system prompt; use this when the task looks like something this repo has already taught you, or when those notes mention an older one.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Words to look for, e.g. "test node" - every word must appear. Empty lists the newest memories.' },
+          limit: { type: 'integer', description: 'Max memories to return. Default 20' },
+        },
         additionalProperties: false,
       },
     },
@@ -301,6 +336,36 @@ const HANDLERS = {
     if (stderr.trim()) parts.push(`stderr:\n${clip(stderr.trimEnd())}`);
     if (!stdout.trim() && !stderr.trim()) parts.push('(no output)');
     return parts.join('\n');
+  },
+
+  /* ---- long-term memory (see memory.js) ---------------------------- *
+   * These two are the ONLY tools whose effect is still there after the
+   * process exits. `remember` is a write to a file the harness also reads,
+   * and `recall` is the lazy half of the same store: the digest in the
+   * system prompt is bounded, so older notes have to be asked for.        */
+
+  remember(ws, args, ctx) {
+    if (!ctx.memory) return 'ERROR: no memory store in this run (started with --no-memory)';
+    const saved = ctx.memory.remember(args.text, { tag: args.tag });
+    if (!saved.ok) return `ERROR: ${saved.reason}`;
+    if (saved.duplicate) {
+      return `already remembered in ${ctx.memory.label} (${saved.total} total), date refreshed: ${formatEntry(saved.entry)}`;
+    }
+    const dropped = saved.dropped ? `, dropped the ${saved.dropped} oldest` : '';
+    return `remembered in ${ctx.memory.label} (${saved.total} total${dropped}): ${formatEntry(saved.entry)}`;
+  },
+
+  recall(ws, args, ctx) {
+    if (!ctx.memory) return 'ERROR: no memory store in this run (started with --no-memory)';
+    const query = String(args.query ?? '');
+    const hits = ctx.memory.search(query, { limit: args.limit ?? 20 });
+    if (!hits.length) {
+      return `no memories in ${ctx.memory.label} match "${query}" (${ctx.memory.size} stored)`;
+    }
+    const head = `${hits.length} of ${ctx.memory.size} memories in ${ctx.memory.label}:`;
+    // One hit on one line, so the console's first-line preview shows the memory
+    // itself rather than only the count.
+    return hits.length === 1 ? `${head} ${formatEntry(hits[0])}` : `${head}\n${hits.map(formatEntry).join('\n')}`;
   },
 };
 

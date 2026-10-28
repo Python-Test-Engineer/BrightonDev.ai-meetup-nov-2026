@@ -33,6 +33,18 @@
  *   WORKSPACE_DIR                          default 'workspace'. Sandbox root the
  *                                            agent may read/write, relative to the
  *                                            package root.
+ *   MEMORY_FILE                            default 'src/memory.md'. Where long-term
+ *                                            memory lives (see memory.js). Relative
+ *                                            paths resolve against the package root,
+ *                                            so the default sits next to the code
+ *                                            where you can read it; an absolute path
+ *                                            points at a shared store.
+ *   MEMORY_MAX_ENTRIES                     default 60. Hard cap on entries in the
+ *                                            file; the oldest are dropped.
+ *   MEMORY_PROMPT_CHARS                    default 1200. Character budget for the
+ *                                            memory block injected into the system
+ *                                            prompt. 0 disables injection (the
+ *                                            `recall` tool still works).
  *
  * PRECEDENCE: explicit overrides (CLI `--model`, `loadConfig({...})`) > nearest
  * `.env` > shell environment > defaults above.
@@ -153,6 +165,9 @@ export function loadConfig(overrides = {}, { envFile, startDir } = {}) {
   const replaced = (fromFileValue, inheritedValue) =>
     Boolean(fromFileValue) && inheritedValue !== undefined && inheritedValue !== fromFileValue;
 
+  const workspaceRoot = path.resolve(PROJECT_ROOT, process.env.WORKSPACE_DIR || 'workspace');
+  const memoryFile = process.env.MEMORY_FILE || 'src/memory.md';
+
   return {
     apiKey,
     apiKeySource: overrides.apiKey ? 'override' : sourceOf('OPENROUTER_API_KEY', keyFromFile),
@@ -161,10 +176,20 @@ export function loadConfig(overrides = {}, { envFile, startDir } = {}) {
     modelSource: overrides.model ? 'flag' : sourceOf('OPENROUTER_MODEL', modelFromFile),
     modelOverrodeShell: replaced(modelFromFile, inherited.model),
     modelNormalised: normalised,
-    workspaceRoot: path.resolve(PROJECT_ROOT, process.env.WORKSPACE_DIR || 'workspace'),
+    workspaceRoot,
     commandPolicy: process.env.CMD_POLICY || 'ask', // allow | ask | deny
     maxSteps: Number(process.env.MAX_STEPS) || 12,
     requestTimeoutMs: Number(process.env.REQUEST_TIMEOUT_MS) || 90_000,
+    // Memory is harness-owned, not sandbox-owned: it resolves against the PACKAGE
+    // root, so the default file sits in src/ where you can open it and read it.
+    // The agent still cannot touch it with write_file - only `remember` can - and
+    // an absolute MEMORY_FILE points at a shared store outside both trees.
+    memoryFile: path.isAbsolute(memoryFile) ? memoryFile : path.resolve(PROJECT_ROOT, memoryFile),
+    projectRoot: PROJECT_ROOT,
+    memoryMaxEntries: Number(process.env.MEMORY_MAX_ENTRIES) || 60,
+    memoryPromptChars: process.env.MEMORY_PROMPT_CHARS === undefined
+      ? 1200
+      : Number(process.env.MEMORY_PROMPT_CHARS) || 0,
     envFile: resolvedEnvFile,
   };
 }
