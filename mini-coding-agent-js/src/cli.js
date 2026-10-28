@@ -239,6 +239,7 @@ export function interpretCommand(line) {
 export function trimHistory(messages, max = MAX_HISTORY) {
   const kept = (messages ?? []).filter((m) => m.role !== 'system');
   let start = Math.max(0, kept.length - Math.max(0, max));
+  // Never start on a tool result or an unanswered tool_calls: providers reject it.
   while (start < kept.length && kept[start].role !== 'user') start += 1;
   return start >= kept.length ? [] : kept.slice(start);
 }
