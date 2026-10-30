@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mini-coding-js &middot; how an agent actually works</title>
 <style>
-html{font-size:24px}
+html{font-size:var(--root-size,24px)}
 
 :root{
   --paper:#f0eee6; --surface:#fbfaf7; --ivory:#fffdfa; --ink:#1f1e1d;
@@ -23,7 +23,7 @@ html{font-size:24px}
 html{scroll-behavior:smooth}
 body{
   margin:0; background:var(--paper); color:var(--prose);
-  font:1.03125rem/1.66 var(--sans);
+  font:1.03125rem/var(--lh-body,1.66) var(--sans);
   -webkit-font-smoothing:antialiased;
 }
 ::selection{background:#f0d3c6; color:#2a2622}
@@ -160,7 +160,7 @@ figure.code figcaption{
 figure.code figcaption .lang{color:#7d776b; font-size:0.6625rem; letter-spacing:.1em; text-transform:uppercase}
 figure.code pre{
   margin:0; padding:0.9375rem 1.125rem 1.0625rem; overflow-x:auto;
-  color:var(--code-ink); font:0.775rem/1.66 var(--mono); tab-size:2;
+  color:var(--code-ink); font:var(--fs-code,0.775rem)/1.66 var(--mono); tab-size:2;
   white-space:pre-wrap; overflow-wrap:break-word;
 }
 figure.ascii{
@@ -202,8 +202,7 @@ tbody td:first-child{white-space:nowrap}
 .colophon code{font-size:0.7rem}
 
 /* ---------- dark ---------- */
-@media (prefers-color-scheme: dark){
-  :root{
+html[data-theme="dark"]{
     --paper:#171614; --surface:#1e1d1a; --ivory:#232220; --ink:#f1ece2;
     --prose:#cdc7ba; --muted:#a8a294; --stone:#8b857a;
     --line:#332f29; --line-soft:#2a2721; --tint:#2b241f;
@@ -211,20 +210,19 @@ tbody td:first-child{white-space:nowrap}
     --code-bg:#1b1a17; --code-bar:#232220; --code-line:#332f2a;
     --code-ink:#efe9de; --code-dim:#9a948a; --code-accent:#f0b49a;
   }
-  ::selection{background:#4a2f24; color:#f1ece2}
-  .sidebar{background:linear-gradient(180deg,#1c1b18,#191815 60%,#171614)}
-  .toc a .n{color:#6f6a60}
-  .toc a:hover{background:#242320}
-  .toc a.active{background:#2b241f}
-  .side-kicker{color:#e08a6a}
-  code{background:#2a2721; color:#e2a184}
-  .callout{color:#c9c3b6}
-  .callout.warn{color:#cdc4ad}
-  figure.ascii{background:#1d1c19; border-color:#3a362f}
-  figure.ascii pre{color:#c3bcae}
-  .tag{background:#3a2a22; color:#e8a888}
-  .meta span::before{color:#4a463f}
-}
+html[data-theme="dark"] ::selection{background:var(--tint); color:var(--ink)}
+html[data-theme="dark"] .sidebar{background:linear-gradient(180deg,var(--surface),var(--paper) 60%,var(--paper))}
+html[data-theme="dark"] .toc a .n{color:var(--stone)}
+html[data-theme="dark"] .toc a:hover{background:var(--surface)}
+html[data-theme="dark"] .toc a.active{background:var(--tint)}
+html[data-theme="dark"] .side-kicker{color:var(--terra)}
+html[data-theme="dark"] code{background:var(--line-soft); color:var(--terra)}
+html[data-theme="dark"] .callout{color:var(--prose)}
+html[data-theme="dark"] .callout.warn{color:var(--amber)}
+html[data-theme="dark"] figure.ascii{background:var(--code-bg); border-color:var(--line)}
+html[data-theme="dark"] figure.ascii pre{color:var(--prose)}
+html[data-theme="dark"] .tag{background:var(--tint); color:var(--terra)}
+html[data-theme="dark"] .meta span::before{color:var(--line)}
 
 /* ---------- narrow ---------- */
 @media (max-width: 940px){
@@ -259,14 +257,14 @@ tbody td:first-child{white-space:nowrap}
      page is set at 24px/1rem and would print body text at 18pt; and the
      heading sizes, which are the sizes build_pdf.py reads back to build the
      PDF outline (30pt title, 19pt chapter, 12.5pt section). */
-  :root{
+  :root,html[data-theme="dark"]{
     color-scheme:light;
-    --paper:#fff; --surface:#fff; --ivory:#fff;
-    --ink:#1f1e1d; --prose:#33302c; --muted:#44423d; --stone:#6b675f;
-    --line:#d8d3c8; --line-soft:#e8e4da; --tint:#f8f2ec;
-    --terra:#c9633f; --terra-dark:#a14e2f; --amber:#8a6420;
-    --code-bg:#f6f4ef; --code-bar:#efece3; --code-line:#ddd8cc;
-    --code-ink:#26241f; --code-dim:#6b675f; --code-accent:#8f3f27;
+    --paper:#fff !important; --surface:#fff !important; --ivory:#fff !important;
+    --ink:#1f1e1d !important; --prose:#33302c !important; --muted:#44423d !important; --stone:#6b675f !important;
+    --line:#d8d3c8 !important; --line-soft:#e8e4da !important; --tint:#f8f2ec !important;
+    --terra:#c9633f !important; --terra-dark:#a14e2f !important; --amber:#8a6420 !important;
+    --code-bg:#f6f4ef !important; --code-bar:#efece3 !important; --code-line:#ddd8cc !important;
+    --code-ink:#26241f !important; --code-dim:#6b675f !important; --code-accent:#8f3f27 !important;
   }
   html{font-size:13px; background:#fff; scroll-behavior:auto}
   body{background:#fff; color:var(--prose); font-size:10.5pt; line-height:1.55}
@@ -313,7 +311,109 @@ tbody td:first-child{white-space:nowrap}
   pre{orphans:3; widows:3}
   a{color:inherit; text-decoration:none}
 }
+
+/* ---------- appearance panel (the rounded "Aa" button, bottom right) ---------- */
+
+#stylebtn{
+  position:fixed; z-index:60; right:18px; bottom:18px;
+  display:grid; place-items:center; width:46px; height:46px; padding:0;
+  border:1px solid var(--line); border-radius:50%;
+  background:var(--surface); color:var(--ink);
+  box-shadow:0 6px 22px rgba(31,30,29,.16);
+  font:500 15px/1 var(--serif); cursor:pointer;
+  transition:border-color .14s, color .14s, transform .14s;
+}
+#stylebtn:hover{border-color:var(--terra); color:var(--terra-dark); transform:translateY(-1px)}
+#stylebtn:focus-visible{outline:2px solid var(--terra); outline-offset:2px}
+#stylebtn[aria-expanded="true"]{border-color:var(--terra); color:var(--terra-dark)}
+
+#stylepanel{
+  position:fixed; z-index:61; right:18px; bottom:76px;
+  display:flex; flex-direction:column; width:372px;
+  max-height:min(78vh,760px);
+  border:1px solid var(--line); border-radius:14px;
+  background:var(--surface); color:var(--ink);
+  box-shadow:0 18px 50px rgba(31,30,29,.24);
+  font:12.5px/1.45 var(--sans);
+}
+#stylepanel[hidden]{display:none}
+
+.sp-head{
+  display:flex; align-items:center; gap:8px;
+  padding:11px 13px; border-bottom:1px solid var(--line-soft);
+}
+.sp-head h2{margin:0; padding:0; border:0; display:block; font:600 13px/1.2 var(--sans); color:var(--ink)}
+.sp-head h2::before{content:none}
+
+.sp-head select,.sp-foot button{
+  padding:5px 9px; border:1px solid var(--line); border-radius:7px;
+  background:var(--ivory); color:var(--ink);
+  font:12.5px/1.3 var(--sans); cursor:pointer;
+}
+.sp-head select:focus-visible,.sp-foot button:focus-visible{outline:2px solid var(--terra); outline-offset:1px}
+
+#sp-close{
+  width:26px; height:26px; padding:0; border:1px solid transparent; border-radius:50%;
+  background:none; color:var(--stone); font:14px/1 var(--sans); cursor:pointer;
+}
+#sp-close:hover{border-color:var(--line); color:var(--ink)}
+
+.sp-body{padding:2px 13px 12px; overflow-x:hidden; overflow-y:auto; scrollbar-width:thin}
+
+.sp-group{padding:11px 0; border-bottom:1px solid var(--line-soft)}
+.sp-group:last-child{border-bottom:0}
+.sp-group h3{
+  margin:0 0 8px; color:var(--stone);
+  font:700 9.5px/1.2 var(--sans); letter-spacing:.12em; text-transform:uppercase;
+}
+.sp-group h3 .tag{margin-left:6px; color:var(--terra-dark); letter-spacing:.04em; text-transform:none}
+
+.sp-row{display:grid; grid-template-columns:1fr auto; gap:2px 10px; align-items:baseline; margin:9px 0}
+.sp-row label{color:var(--muted)}
+.sp-row > *{min-width:0}
+.sp-row output{color:var(--ink); font-variant-numeric:tabular-nums; font-size:11.5px}
+.sp-row input[type="range"]{grid-column:1/-1; width:100%; margin:3px 0 0; accent-color:var(--terra)}
+.sp-row input[type="text"]{
+  grid-column:1/-1; width:100%; margin-top:4px; padding:5px 8px;
+  border:1px solid var(--line); border-radius:7px;
+  background:var(--ivory); color:var(--ink); font:11px/1.4 var(--mono);
+}
+
+.sp-colors label{
+  display:grid; grid-template-columns:26px 1fr auto; gap:8px; align-items:center; padding:2px 0;
+}
+.sp-colors .swatch-label{overflow:hidden; color:var(--muted); text-overflow:ellipsis; white-space:nowrap}
+.sp-colors input[type="color"]{
+  width:26px; height:22px; padding:0; border:1px solid var(--line); border-radius:6px;
+  background:none; cursor:pointer;
+}
+.sp-colors .hex{color:var(--stone); font:11px/1 var(--mono)}
+
+.sp-foot{
+  display:flex; align-items:center; gap:8px;
+  padding:10px 13px; border-top:1px solid var(--line-soft);
+}
+.sp-foot .spacer{flex:1}
+
+@media (max-width:520px){
+  #stylepanel{right:8px; left:8px; width:auto; bottom:72px}
+}
+
+@media print{
+  #stylebtn,#stylepanel{display:none !important}
+}
+
 </style>
+<script>
+(function () {
+  try {
+    var saved = JSON.parse(localStorage.getItem('mca-appearance:v1') || '{}');
+    var mode = saved.mode || 'auto';
+    var dark = mode === 'dark' || (mode === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  } catch (e) { /* private mode: fall back to the stylesheet default */ }
+})();
+</script>
 </head>
 <body>
 <div class="progress"><span id="bar"></span></div>
@@ -1732,6 +1832,8 @@ seen a coding agent do is built from these pieces &mdash; and now you know what 
         Hooks: <code>npm run hooks</code>. Memory: <code>node src/cli.js --memory</code>.
         Sandbox walkthrough: <code>sandbox-guide.html</code> (this page was built alongside
         <code>sandbox.html</code>, which is now <code>sandbox-guide.html</code>).
+        Appearance: the round <code>Aa</code> button, bottom right - scheme, type scale, fonts and every
+        colour token, saved in <code>localStorage</code> and exportable as CSS.
       </p>
     </div>
   </main>
@@ -1775,6 +1877,371 @@ seen a coding agent do is built from these pieces &mdash; and now you know what 
   update();
 })();
 
+</script>
+<button id="stylebtn" type="button" aria-expanded="false" aria-controls="stylepanel"
+        aria-label="Appearance settings" title="Appearance">Aa</button>
+
+<aside id="stylepanel" hidden aria-label="Appearance settings">
+  <div class="sp-head">
+    <h2>Appearance</h2>
+    <select id="sp-mode" aria-label="Colour scheme">
+      <option value="auto">Auto</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+    <button id="sp-close" type="button" aria-label="Close appearance panel">&#10005;</button>
+  </div>
+  <div class="sp-body" id="sp-body"></div>
+  <div class="sp-foot">
+    <button id="sp-reset" type="button">Reset</button>
+    <span class="spacer"></span>
+    <button id="sp-copy" type="button">Copy CSS</button>
+  </div>
+</aside>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================
+     Appearance panel - the same idea as the one in nanocode's
+     book.html: the page's CSS custom properties are the settings
+     schema, so the panel can never drift from the stylesheet.
+     Every change is written as an inline property on :root, saved
+     to localStorage, and can be copied back out as CSS.
+     ============================================================ */
+
+  var SPEC = [
+    { table: 'type', title: 'Type', items: [
+      { key: 'root_size', cssVar: '--root-size', kind: 'number', unit: 'px', min: 16, max: 40, step: 0.5, def: 24, label: 'Text size' },
+      { key: 'lh_body', cssVar: '--lh-body', kind: 'number', unit: '', min: 1.2, max: 2.2, step: 0.01, def: 1.66, label: 'Line height' },
+      { key: 'fs_code', cssVar: '--fs-code', kind: 'number', unit: 'rem', min: 0.6, max: 1.2, step: 0.005, def: 0.775, label: 'Code size' }
+    ] },
+    { table: 'layout', title: 'Layout', items: [
+      { key: 'sidebar', cssVar: '--sidebar', kind: 'number', unit: 'rem', min: 12, max: 30, step: 0.25, def: 19.25, label: 'Sidebar width' },
+      { key: 'measure', cssVar: '--measure', kind: 'number', unit: 'rem', min: 30, max: 72, step: 1, def: 46, label: 'Reading column' }
+    ] },
+    { table: 'fonts', title: 'Fonts', items: [
+      { key: 'serif', cssVar: '--serif', kind: 'font', def: "'Iowan Old Style',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif", label: 'Headings (serif)' },
+      { key: 'sans', cssVar: '--sans', kind: 'font', def: "-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif", label: 'Body (sans)' },
+      { key: 'mono', cssVar: '--mono', kind: 'font', def: "'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Consolas,monospace", label: 'Code (mono)' }
+    ] },
+    { table: 'colors', title: 'Colours', colors: true, items: [
+      { key: 'paper', cssVar: '--paper', kind: 'color', label: 'Page background' },
+      { key: 'surface', cssVar: '--surface', kind: 'color', label: 'Sidebar / panel' },
+      { key: 'ivory', cssVar: '--ivory', kind: 'color', label: 'Cards and inputs' },
+      { key: 'ink', cssVar: '--ink', kind: 'color', label: 'Headings' },
+      { key: 'prose', cssVar: '--prose', kind: 'color', label: 'Body text' },
+      { key: 'muted', cssVar: '--muted', kind: 'color', label: 'Secondary text' },
+      { key: 'stone', cssVar: '--stone', kind: 'color', label: 'Faint labels' },
+      { key: 'line', cssVar: '--line', kind: 'color', label: 'Borders' },
+      { key: 'line_soft', cssVar: '--line-soft', kind: 'color', label: 'Hairlines' },
+      { key: 'tint', cssVar: '--tint', kind: 'color', label: 'Active nav' },
+      { key: 'terra', cssVar: '--terra', kind: 'color', label: 'Accent' },
+      { key: 'terra_dark', cssVar: '--terra-dark', kind: 'color', label: 'Links / eyebrow' },
+      { key: 'amber', cssVar: '--amber', kind: 'color', label: 'Warnings' },
+      { key: 'code_bg', cssVar: '--code-bg', kind: 'color', label: 'Code background' },
+      { key: 'code_bar', cssVar: '--code-bar', kind: 'color', label: 'Code caption bar' },
+      { key: 'code_line', cssVar: '--code-line', kind: 'color', label: 'Code border' },
+      { key: 'code_ink', cssVar: '--code-ink', kind: 'color', label: 'Code text' },
+      { key: 'code_dim', cssVar: '--code-dim', kind: 'color', label: 'Code comments' },
+      { key: 'code_accent', cssVar: '--code-accent', kind: 'color', label: 'Code caption text' }
+    ] }
+  ];
+
+  var DEFAULTS = {
+    base: {
+      root_size: 24, lh_body: 1.66, fs_code: 0.775, sidebar: 19.25, measure: 46,
+      serif: "'Iowan Old Style',Palatino,'Palatino Linotype','Book Antiqua',Georgia,serif",
+      sans: "-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif",
+      mono: "'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Consolas,monospace"
+    },
+    colors: {
+      light: {
+        paper: '#f0eee6', surface: '#fbfaf7', ivory: '#fffdfa', ink: '#1f1e1d',
+        prose: '#33302c', muted: '#55524c', stone: '#8c877c',
+        line: '#e0dbcf', line_soft: '#e9e4d8', tint: '#f6ede6',
+        terra: '#d97757', terra_dark: '#c9633f', amber: '#b9862f',
+        code_bg: '#23211e', code_bar: '#2b2823', code_line: '#3a3732',
+        code_ink: '#f2ece1', code_dim: '#a9a294', code_accent: '#f0b49a'
+      },
+      dark: {
+        paper: '#171614', surface: '#1e1d1a', ivory: '#232220', ink: '#f1ece2',
+        prose: '#cdc7ba', muted: '#a8a294', stone: '#8b857a',
+        line: '#332f29', line_soft: '#2a2721', tint: '#2b241f',
+        terra: '#e08a6a', terra_dark: '#eda07e', amber: '#d3a44a',
+        code_bg: '#1b1a17', code_bar: '#232220', code_line: '#332f2a',
+        code_ink: '#efe9de', code_dim: '#9a948a', code_accent: '#f0b49a'
+      }
+    }
+  };
+
+  var INIT_MODE = 'auto';
+  var STORE = 'mca-appearance:v1';
+
+  var root = document.documentElement;
+  var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
+  var copy = function (target, source) {
+    Object.keys(target).forEach(function (k) { delete target[k]; });
+    Object.keys(clone(source)).forEach(function (k) { target[k] = clone(source)[k]; });
+  };
+
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { saved = {}; }
+
+  var state = {
+    mode: ['auto', 'light', 'dark'].indexOf(saved.mode) >= 0 ? saved.mode : INIT_MODE,
+    base: Object.assign(clone(DEFAULTS.base), saved.base || {}),
+    colors: {
+      light: Object.assign(clone(DEFAULTS.colors.light), (saved.colors || {}).light || {}),
+      dark: Object.assign(clone(DEFAULTS.colors.dark), (saved.colors || {}).dark || {})
+    }
+  };
+
+  var resolved = function () {
+    return state.mode === 'auto' ? (darkQuery.matches ? 'dark' : 'light') : state.mode;
+  };
+
+  var cssVal = function (item, value) {
+    return item.unit ? value + item.unit : String(value);
+  };
+
+  var apply = function () {
+    var mode = resolved();
+    root.setAttribute('data-theme', mode);
+
+    SPEC.forEach(function (group) {
+      group.items.forEach(function (item) {
+        var value = item.kind === 'color' ? state.colors[mode][item.key] : state.base[item.key];
+        if (value === undefined || value === null || value === '') root.style.removeProperty(item.cssVar);
+        else root.style.setProperty(item.cssVar, cssVal(item, value));
+      });
+    });
+  };
+
+  var persist = function () {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
+  };
+
+  /* ---- build the panel ---- */
+  var panel = document.getElementById('stylepanel');
+  var button = document.getElementById('stylebtn');
+  var panelBody = document.getElementById('sp-body');
+  var modeSelect = document.getElementById('sp-mode');
+  var refs = {};
+
+  var hex6 = function (value) {
+    var v = String(value || '').trim().replace('#', '');
+    if (v.length === 3) v = v.split('').map(function (c) { return c + c; }).join('');
+    return '#' + v.slice(0, 6).padStart(6, '0');
+  };
+
+  var addGroup = function (group) {
+    var wrap = document.createElement('div');
+    wrap.className = 'sp-group';
+
+    var title = document.createElement('h3');
+    title.textContent = group.title;
+    if (group.colors) {
+      var tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.id = 'sp-modetag';
+      title.appendChild(tag);
+    }
+    wrap.appendChild(title);
+
+    if (group.colors) {
+      var grid = document.createElement('div');
+      grid.className = 'sp-colors';
+      group.items.forEach(function (item) {
+        var label = document.createElement('label');
+        var swatch = document.createElement('input');
+        swatch.type = 'color';
+        swatch.title = item.label + '  (' + item.cssVar + ')';
+        swatch.setAttribute('aria-label', item.label);
+        var name = document.createElement('span');
+        name.className = 'swatch-label';
+        name.textContent = item.label;
+        var hex = document.createElement('span');
+        hex.className = 'hex';
+        label.append(swatch, name, hex);
+        grid.appendChild(label);
+
+        swatch.addEventListener('input', function () {
+          state.colors[resolved()][item.key] = swatch.value;
+          hex.textContent = swatch.value;
+          apply();
+          persist();
+        });
+        refs[item.key] = { swatch: swatch, hex: hex };
+      });
+      wrap.appendChild(grid);
+      panelBody.appendChild(wrap);
+      return;
+    }
+
+    group.items.forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'sp-row';
+      var label = document.createElement('label');
+      label.textContent = item.label;
+      row.appendChild(label);
+
+      if (item.kind === 'font') {
+        var text = document.createElement('input');
+        text.type = 'text';
+        text.spellcheck = false;
+        label.appendChild(text);
+        text.addEventListener('change', function () {
+          var value = text.value.trim();
+          if (value) {
+            state.base[item.key] = value;
+            apply();
+            persist();
+          }
+        });
+        refs[item.key] = { input: text };
+      } else {
+        var out = document.createElement('output');
+        row.appendChild(out);
+        var input = document.createElement('input');
+        input.type = 'range';
+        input.min = item.min;
+        input.max = item.max;
+        input.step = item.step;
+        input.setAttribute('aria-label', item.label);
+        row.appendChild(input);
+        input.addEventListener('input', function () {
+          state.base[item.key] = Number(input.value);
+          out.textContent = input.value + (item.unit || '');
+          apply();
+          persist();
+        });
+        refs[item.key] = { input: input, out: out };
+      }
+      wrap.appendChild(row);
+    });
+
+    panelBody.appendChild(wrap);
+  };
+
+  SPEC.forEach(addGroup);
+
+  var refresh = function () {
+    if (modeSelect.value !== state.mode) modeSelect.value = state.mode;
+    var mode = resolved();
+    var modeTag = document.getElementById('sp-modetag');
+    if (modeTag) modeTag.textContent = mode;
+    button.title = 'Appearance - editing ' + mode + ' colours';
+
+    SPEC.forEach(function (group) {
+      group.items.forEach(function (item) {
+        var ref = refs[item.key];
+        if (!ref) return;
+        if (item.kind === 'color') {
+          var value = state.colors[mode][item.key] || '#000000';
+          ref.swatch.value = hex6(value);
+          ref.hex.textContent = String(value);
+        } else if (item.kind === 'font') {
+          ref.input.value = state.base[item.key] || '';
+        } else {
+          var n = state.base[item.key];
+          ref.input.value = n;
+          ref.out.textContent = n + (item.unit || '');
+        }
+      });
+    });
+  };
+
+  var reopen = function () { apply(); refresh(); };
+
+  modeSelect.addEventListener('change', function () {
+    state.mode = modeSelect.value;
+    reopen();
+    persist();
+  });
+
+  if (darkQuery.addEventListener) {
+    darkQuery.addEventListener('change', function () { if (state.mode === 'auto') reopen(); });
+  }
+
+  // Some browsers (and every devtools emulation) do not fire the media-query
+  // event on an OS theme switch; re-check when the page is focused again.
+  window.addEventListener('focus', function () {
+    if (state.mode === 'auto' && root.getAttribute('data-theme') !== resolved()) reopen();
+  });
+
+  document.getElementById('sp-reset').addEventListener('click', function () {
+    copy(state.base, DEFAULTS.base);
+    copy(state.colors.light, DEFAULTS.colors.light);
+    copy(state.colors.dark, DEFAULTS.colors.dark);
+    state.mode = INIT_MODE;
+    try { localStorage.removeItem(STORE); } catch (e) { /* ignore */ }
+    reopen();
+  });
+
+  var toCss = function () {
+    var lines = ['/* generated by the appearance panel - paste into the page <style> */', ':root{'];
+    SPEC.forEach(function (group) {
+      if (group.colors) return;
+      group.items.forEach(function (item) {
+        lines.push('  ' + item.cssVar + ':' + cssVal(item, state.base[item.key]) + ';');
+      });
+    });
+    lines.push('');
+    var colors = SPEC[SPEC.length - 1].items;
+    colors.forEach(function (item) {
+      lines.push('  ' + item.cssVar + ':' + state.colors.light[item.key] + ';');
+    });
+    lines.push('}');
+    lines.push('html[data-theme="dark"]{');
+    colors.forEach(function (item) {
+      lines.push('  ' + item.cssVar + ':' + state.colors.dark[item.key] + ';');
+    });
+    lines.push('}');
+    return lines.join('\n');
+  };
+
+  var copyText = function (text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+    }
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    area.remove();
+    return Promise.resolve(ok);
+  };
+
+  var copyBtn = document.getElementById('sp-copy');
+  copyBtn.addEventListener('click', function () {
+    copyText(toCss()).then(function (ok) {
+      copyBtn.textContent = ok ? 'Copied' : 'Copy failed';
+      setTimeout(function () { copyBtn.textContent = 'Copy CSS'; }, 1600);
+    });
+  });
+
+  var toggle = function (open) {
+    panel.hidden = !open;
+    button.setAttribute('aria-expanded', String(open));
+    if (open) { refresh(); }
+  };
+
+  button.addEventListener('click', function () { toggle(panel.hidden); });
+  document.getElementById('sp-close').addEventListener('click', function () { toggle(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !panel.hidden) toggle(false);
+  });
+
+  apply();
+  refresh();
+})();
 </script>
 </body>
 </html>

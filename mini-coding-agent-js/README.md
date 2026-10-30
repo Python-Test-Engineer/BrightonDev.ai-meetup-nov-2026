@@ -46,6 +46,11 @@ npm start                  # a session: type a task at the "task ›" prompt, th
 
 Both HTML pages are self-contained - open them straight from disk, no build step.
 
+Both pages also carry an **Appearance panel**: the round `Aa` button in the bottom-right corner opens
+colour scheme (auto / light / dark), text size, line height, code size, sidebar and reading-column width,
+the three font stacks and every colour token. Choices are saved in `localStorage` (so they follow you
+between the two pages), reset with one button, and exported as CSS with **Copy CSS**.
+
 ## Sessions: one task after another
 
 `npm start` with no task opens a prompt and *stays open*. A session is the same loop
