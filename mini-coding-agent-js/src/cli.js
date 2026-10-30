@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url';
 import { chat } from './llm.js';
 import { TOOL_NAMES, SANDBOX_LIMITS } from './tools.js';
 import { Workspace } from './workspace.js';
+import { Sandbox } from './sandbox.js';
 import { loadConfig, fingerprint } from './config.js';
 import { Memory } from './memory.js';
 import { ui } from './ui.js';
@@ -179,12 +180,13 @@ function showMemory(memory, config) {
 }
 
 /** The startup banner: one reproducible header, printed before step 1. */
-function banner({ config, workspace, memory, commandPolicy, opts }) {
+function banner({ config, workspace, sandbox, memory, commandPolicy, opts }) {
   const source = (label, overrode) => (overrode ? `${label}, overrode the shell value` : label);
   const kv = (label, value) => console.log(ui.kv(label, value));
 
   console.log(ui.title('\nmin-coding-js'));
   kv('workspace', workspace.root);
+  kv('sandbox', `${sandbox.summary()} (reads: anywhere)`);
   kv('model', opts.demo ? 'scripted (no network)' : `${config.model} (from ${source(config.modelSource, config.modelOverrodeShell)})`);
   kv('key', opts.demo ? '-' : `${fingerprint(config.apiKey)} from ${source(config.apiKeySource, config.apiKeyOverrodeShell)}`);
   kv('env file', fs.existsSync(config.envFile) ? config.envFile : `${config.envFile} (missing)`);
@@ -324,6 +326,9 @@ async function runCli() {
 
   const config = loadConfig({ model: opts.model });
   const workspace = new Workspace(config.workspaceRoot);
+  // One fence per run: save/edit/delete inside the workspace, one loud FORBIDDEN
+  // line per refusal, and a count the session summary can report.
+  const sandbox = new Sandbox({ workspace, log: console.log });
   const memory = new Memory({
     // root = the package, so the label reads "src/memory.md" rather than an
     // absolute path. The file itself comes from config and may be absolute.
@@ -341,7 +346,7 @@ async function runCli() {
   // scratch file), so it may auto-approve; live runs keep the ask policy.
   const commandPolicy = opts.yes || opts.demo ? 'allow' : (opts.policy ?? config.commandPolicy);
 
-  banner({ config, workspace, memory, commandPolicy, opts });
+  banner({ config, workspace, sandbox, memory, commandPolicy, opts });
 
   const chatFn = opts.demo
     ? demoChat()
@@ -375,6 +380,7 @@ async function runCli() {
   // session pays for the banner and the config once.
   const base = {
     workspace,
+    sandbox,
     commandPolicy,
     maxSteps: opts.maxSteps ?? (opts.demo ? DEMO_SCRIPT.length + 1 : config.maxSteps),
     chatFn,

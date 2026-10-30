@@ -38,7 +38,7 @@ import { ui } from './ui.js';
 export function systemRules(tools = TOOL_NAMES) {
   return `You are a small coding agent working inside a sandboxed folder.
 
-You have tools: ${tools.join(', ')}. All paths are relative to your workspace root; absolute paths and ".." are refused.
+You have tools: ${tools.join(', ')}. Reads may use any path (relative paths start at your workspace root; absolute paths are allowed). Writing is fenced: save, edit and delete only work inside the workspace, and anything else is refused with FORBIDDEN - do not retry it, work inside the workspace instead.
 
 How to work:
 1. Look before you write: list_files / read_file before editing.

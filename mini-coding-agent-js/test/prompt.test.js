@@ -15,7 +15,8 @@ function memory(options = {}) {
 test('the system rules name every tool the model can call', () => {
   const rules = systemRules();
   for (const name of TOOL_NAMES) assert.match(rules, new RegExp(`\\b${name}\\b`));
-  assert.match(rules, /All paths are relative to your workspace root/);
+  assert.match(rules, /Reads may use any path/);
+  assert.match(rules, /only work inside the workspace/);
   // Rule 6 is the memory rule: durable facts, never task progress.
   assert.match(rules, /save it with remember/);
   assert.match(rules, /Never save task progress/);

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { exec } from 'node:child_process';
 import { PathError } from './workspace.js';
+import { sandboxFor, ACTIONS, ForbiddenError } from './sandbox.js';
 import { formatEntry } from './memory.js';
 
 /* ------------------------------------------------------------------ *
@@ -13,7 +14,7 @@ export const TOOL_SCHEMAS = [
     type: 'function',
     function: {
       name: 'list_files',
-      description: 'List files and folders in the workspace, recursively. Use this first when you are unsure what exists.',
+      description: 'List files and folders, recursively, from the workspace root or any absolute path. Use this first when you are unsure what exists.',
       parameters: {
         type: 'object',
         properties: {
@@ -28,7 +29,7 @@ export const TOOL_SCHEMAS = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read a text file with line numbers. Use it before editing so old_string matches exactly.',
+      description: 'Read a text file with line numbers. Use it before editing so old_string matches exactly. Reads may use any absolute path; writes stay inside the workspace.',
       parameters: {
         type: 'object',
         properties: {
@@ -221,7 +222,7 @@ function runShell(command, cwd) {
  * ------------------------------------------------------------------ */
 const HANDLERS = {
   list_files(ws, args) {
-    const start = ws.resolve(args.path ?? '.');
+    const start = ws.resolveRead(args.path ?? '.');
     if (!fs.existsSync(start.abs)) return `ERROR: no such folder: ${start.rel}`;
     if (!fs.statSync(start.abs).isDirectory()) return `ERROR: not a folder: ${start.rel}`;
 
@@ -254,7 +255,7 @@ const HANDLERS = {
   },
 
   read_file(ws, args) {
-    const target = ws.resolve(args.path);
+    const target = ws.resolveRead(args.path);
     if (!fs.existsSync(target.abs)) return `ERROR: no such file: ${target.rel}`;
     if (fs.statSync(target.abs).isDirectory()) return `ERROR: ${target.rel} is a folder - use list_files`;
 
@@ -270,26 +271,31 @@ const HANDLERS = {
     return `${target.rel} (${all.length} lines)\n${numbered}${more}`;
   },
 
-  create_file(ws, args) {
-    const target = ws.resolve(args.path);
+  /* ---- the write tools: every mutation goes through the sandbox ---------- *
+   * Reads use `ws.resolve` (workspace.js). Anything that CHANGES a file asks
+   * `sandbox.check()` instead, which is the only code path that can print
+   * FORBIDDEN - so "was this allowed?" has one answer, and one place to look. */
+
+  create_file(ws, args, ctx) {
+    const sandbox = sandboxFor(ctx);
+    const target = sandbox.check(ACTIONS.SAVE, args.path);
     if (fs.existsSync(target.abs)) {
       return `ERROR: ${target.rel} already exists - use edit_file to change it or write_file to overwrite`;
     }
-    fs.mkdirSync(path.dirname(target.abs), { recursive: true });
-    fs.writeFileSync(target.abs, String(args.content), 'utf8');
-    return `created ${target.rel} (${Buffer.byteLength(String(args.content))} bytes)`;
+    const { bytes } = sandbox.write(target, args.content);
+    return `created ${target.rel} (${bytes} bytes)`;
   },
 
-  write_file(ws, args) {
-    const target = ws.resolve(args.path);
-    const existed = fs.existsSync(target.abs);
-    fs.mkdirSync(path.dirname(target.abs), { recursive: true });
-    fs.writeFileSync(target.abs, String(args.content), 'utf8');
-    return `${existed ? 'overwrote' : 'created'} ${target.rel} (${Buffer.byteLength(String(args.content))} bytes)`;
+  write_file(ws, args, ctx) {
+    const sandbox = sandboxFor(ctx);
+    const target = sandbox.check(ACTIONS.SAVE, args.path);
+    const { existed, bytes } = sandbox.write(target, args.content);
+    return `${existed ? 'overwrote' : 'created'} ${target.rel} (${bytes} bytes)`;
   },
 
-  edit_file(ws, args) {
-    const target = ws.resolve(args.path);
+  edit_file(ws, args, ctx) {
+    const sandbox = sandboxFor(ctx);
+    const target = sandbox.check(ACTIONS.EDIT, args.path);
     if (!fs.existsSync(target.abs)) return `ERROR: no such file: ${target.rel}`;
 
     const oldStr = String(args.old_string);
@@ -323,6 +329,13 @@ const HANDLERS = {
     for (const { re, why } of HARD_DENY) {
       if (re.test(command)) return `DENIED: blocked by policy (${why}). Command: ${command}`;
     }
+
+    // The shell is not the sandbox, but its obvious write targets are readable
+    // from the command line: a redirect, a copy/move destination, del/rm
+    // operands. Those are checked BEFORE the approval prompt, so nobody is asked
+    // to approve a write that cannot succeed. A script can still write anywhere
+    // - see the note in sandbox.js; a container is the answer to that.
+    sandboxFor(ctx).checkCommand(command);
 
     const policy = ctx.commandPolicy;
     if (policy === 'deny') return 'DENIED: command execution is disabled (CMD_POLICY=deny).';
@@ -400,6 +413,9 @@ export async function runTool(name, rawArgs, ctx) {
   try {
     return await HANDLERS[name](ctx.workspace, args, ctx);
   } catch (err) {
+    // A sandbox refusal has already printed its FORBIDDEN line; the model gets
+    // the same sentence as an observation and can pick another path.
+    if (err instanceof ForbiddenError) return `FORBIDDEN: ${err.message}`;
     if (err instanceof PathError) return `ERROR: ${err.message}`;
     return `ERROR: ${err.code ?? 'failed'}: ${err.message}`;
   }

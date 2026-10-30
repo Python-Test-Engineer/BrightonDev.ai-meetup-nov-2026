@@ -3,9 +3,16 @@ import os from 'node:os';
 import path from 'node:path';
 
 /**
- * The entire safety story of this demo lives here:
- * every file tool resolves its path through Workspace.resolve(), so the agent
- * can only read and write inside `workspace/`. Commands are separate - see
+ * The path policy of this demo lives here: every file path is resolved by this
+ * class before the filesystem is touched.
+ *
+ *   resolve()      writes - a path outside `workspace/` is refused
+ *   resolveRead()  reads  - allowed anywhere, relative paths use the workspace
+ *
+ * The fence is around mutations, not curiosity: an agent that cannot read the
+ * docs, a library or a log outside its own folder is not useful, but one that
+ * can write there is a bug. sandbox.js is the layer that turns `resolve()`'s
+ * PathError into a shouting FORBIDDEN line. Commands are separate again - see
  * tools.js - because a shell can leave the directory it was started in.
  */
 
@@ -79,6 +86,31 @@ export class Workspace {
       throw new PathError(`path escapes the workspace: ${raw}`);
     }
 
+    const rel = path.relative(this.root, real) || '.';
+    return { abs: real, rel: rel.split(path.sep).join('/') };
+  }
+
+  /**
+   * Resolve a path for READING.
+   *
+   * Reads are deliberately NOT fenced: an agent that cannot read a library, a
+   * log or a doc outside its own folder is useless, and the damage a read can
+   * do is bounded by what goes into the context window. Only the three mutating
+   * actions are confined - that is sandbox.js. Relative paths still resolve
+   * against the root, which is what keeps "./notes.txt" meaning the workspace.
+   *
+   * @returns {{abs: string, rel: string}} rel starts with ".." for an outside path
+   */
+  resolveRead(requested) {
+    if (typeof requested !== 'string' || requested.trim() === '') {
+      throw new PathError('path is required (a filename relative to the workspace, or an absolute path)');
+    }
+    const raw = requested.trim();
+    const expanded = expandVars(raw);
+    const abs = path.isAbsolute(expanded)
+      ? path.resolve(expanded)
+      : path.resolve(this.root, expanded);
+    const real = realResolve(abs);
     const rel = path.relative(this.root, real) || '.';
     return { abs: real, rel: rel.split(path.sep).join('/') };
   }

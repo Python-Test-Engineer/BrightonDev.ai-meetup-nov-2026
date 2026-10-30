@@ -289,16 +289,17 @@ tbody td:first-child{white-space:nowrap}
       <header class="page-heading">
         <p class="eyebrow">Sandbox &middot; the ladder</p>
         <h1>From a path check to a container</h1>
-        <p class="lede">The explainer's chapter 08 admitted the limit: file tools are contained, a shell is not.
-        This is every option for closing that gap, cheapest first &mdash; code, then the operating system,
-        then Docker, then the tiers you only need once someone else's code runs on your machine.</p>
+        <p class="lede">The explainer's chapter 08 admitted the limit: file tools are contained, a shell is where
+        the fence gets thin. This is every option for closing that gap, cheapest first &mdash; code, then the
+        operating system, then Docker, then the tiers you only need once someone else's code runs on your machine.</p>
         <p class="meta">
           <span>7 tiers</span>
-          <span>tier 1 = 85 lines</span>
+          <span>tier 1 = 117 lines</span>
           <span>tier 4 = docker run</span>
           <span>1 interface</span>
           <span>9 red-team checks</span>
         </p>
+        <p class="meta"><span>This page was <code>sandbox.html</code>; it is now <code>sandbox-guide.html</code>.</span></p>
       </header>
 
 <section id="why">
@@ -353,8 +354,10 @@ this page is the cheap insurance.</p>
 <h2><span class="num">04</span><span>Tier 1 &mdash; containment in code</span></h2>
 
 <p>This is the rung the repo is already on, and the first one worth writing because it costs nothing and its
-tests never touch the network. Every file tool funnels through one function, so there is exactly one place
-to be right.</p>
+tests never touch the network. Every path is resolved by one function, so there is exactly one place
+to be right &mdash; and <code>src/sandbox.js</code> wraps it for the three actions that change a file
+(<code>save</code>, <code>edit</code>, <code>delete</code>), printing one bold red <code>FORBIDDEN</code> line
+per refusal. Reads go through the same resolver without the containment check: reads are open, writes are not.</p>
 <figure class="code"><figcaption><span>src/workspace.js &amp;mdash; the containment check</span><span class="lang">javascript</span></figcaption><pre>resolve(requested) {
   const raw = requested.trim();
   const expanded = expandVars(raw);                      // ~ and %VAR% and $VAR
@@ -387,7 +390,7 @@ message describes the request instead of a half-computed path.</p>
     p = parent;
   }
   return path.join(fs.realpathSync.native(p), tail);
-}</pre></figure><div class="callout"><strong>What tier 1 buys:</strong> a model that hallucinates <code>../../../.env</code> gets a sentence back and tries again. <strong>What it does not buy:</strong> anything about <code>run_command</code>, which has no path to check because a shell is not a path.</div>
+}</pre></figure><div class="callout"><strong>What tier 1 buys:</strong> a model that hallucinates <code>../../../.env</code> gets a sentence back and tries again. <strong>What it does not buy:</strong> a shell. <code>run_command</code> has no path to check because a shell is not a path &mdash; the next rung is where commands get bounded, and even then only the writes you can read off the command line (<code>copy</code>, <code>del</code>, a redirect) are refused.</div>
 </section>
 <section id="tier2">
 <h2><span class="num">05</span><span>Tier 2 &mdash; process hardening</span></h2>
@@ -455,9 +458,12 @@ that has all of the harness's privileges.</p>
 <p>A single command is enough to show the gap:</p>
 <figure class="code"><figcaption><span>one command, no path check, no container</span><span class="lang">shell</span></figcaption><pre>cd /c/Users/you &amp;&amp; ls -la .ssh &amp;&amp; cat .ssh/id_rsa | head -3</pre></figure>
 <p>There is no <code>resolve()</code> call anywhere in that line. <code>run_command</code> starts in
-<code>workspace/</code> and the first thing a shell can do is leave. Nothing in tiers 1&ndash;2 changes that,
-and pretending otherwise is the mistake this page exists to prevent.</p>
-<div class="table-wrap"><table><thead><tr><th>Property</th><th>Tier 1</th><th>Tier 2</th></tr></thead><tbody><tr><td>Can write outside the workspace</td><td>via file tools: no</td><td>via file tools: no</td></tr><tr><td>Can write outside the workspace</td><td>via <code>run_command</code>: yes</td><td>via <code>run_command</code>: yes</td></tr><tr><td>Can read <code>~/.ssh</code></td><td>yes, through the shell</td><td>yes, through the shell</td></tr><tr><td>Can reach the network</td><td>yes</td><td>yes (<code>curl</code> blocked, <code>node -e</code> not)</td></tr><tr><td>Can see the API key</td><td>yes</td><td>no, with <code>safeEnv()</code></td></tr><tr><td>Can run for ten minutes</td><td>no</td><td>no, 30&nbsp;s timeout</td></tr></tbody></table></div><div class="callout"><strong>So why bother?</strong> Because these two rungs make the common case fail loudly and cheaply, and they keep working after you add a container. A refusal that costs one loop step is better than a container start that costs two seconds.</div>
+<code>workspace/</code> and the first thing a shell can do is leave. Tier 2 reads the <em>write targets</em> off
+the command line (<code>copy</code>, <code>del</code>, <code>&gt;</code>, <code>-Destination</code>) and refuses
+the ones outside, but that is a scan of the arguments, not a boundary: <code>node -e</code>, a Python one-liner
+or a downloaded script can still reach anything the process can reach. Pretending otherwise is the mistake this
+page exists to prevent.</p>
+<div class="table-wrap"><table><thead><tr><th>Property</th><th>Tier 1</th><th>Tier 2</th></tr></thead><tbody><tr><td>Can write outside the workspace</td><td>via file tools: no</td><td>via file tools: no</td></tr><tr><td>Can write outside the workspace</td><td>via <code>run_command</code>: for the commands it can read (<code>copy</code>, <code>move</code>, <code>del</code>, <code>&gt;</code>) no; for a script it runs, yes</td><td>same: a command-line scan, not isolation</td></tr><tr><td>Can read <code>~/.ssh</code></td><td>yes, through the shell</td><td>yes, through the shell</td></tr><tr><td>Can reach the network</td><td>yes</td><td>yes (<code>curl</code> blocked, <code>node -e</code> not)</td></tr><tr><td>Can see the API key</td><td>yes</td><td>no, with <code>safeEnv()</code></td></tr><tr><td>Can run for ten minutes</td><td>no</td><td>no, 30&nbsp;s timeout</td></tr></tbody></table></div><div class="callout"><strong>So why bother?</strong> Because these two rungs make the common case fail loudly and cheaply, and they keep working after you add a container. A refusal that costs one loop step is better than a container start that costs two seconds.</div>
 </section>
 <section id="tier3">
 <h2><span class="num">07</span><span>Tier 3 &mdash; operating system</span></h2>

@@ -14,8 +14,8 @@
  */
 import chalk from 'chalk';
 
-/** A result is "bad" if the tool reported an error, a denial or a non-zero exit. */
-const isFailure = (text) => /^(ERROR|DENIED)\b/.test(text) || /\bexit code (?!0\b)\d+/.test(text);
+/** A result is "bad" if the tool reported an error, a denial, a refusal or a non-zero exit. */
+const isFailure = (text) => /^(ERROR|DENIED|FORBIDDEN)\b/.test(text) || /\bexit code (?!0\b)\d+/.test(text);
 
 const firstLine = (text, limit = 300) => String(text ?? '').split('\n')[0].slice(0, limit);
 
@@ -91,6 +91,17 @@ export const ui = {
     const code = failedExitCode(line);
     const detail = code === null ? '' : `\n${chalk.dim(`         ↳ exit ${code}: ${explainExit(code)}`)}`;
     return chalk.red(`result ← ${line}`) + detail;
+  },
+  /**
+   * A sandbox refusal, in the same stream as the [HOOK:Name] lifecycle lines:
+   *   "  ⛔ FORBIDDEN SAVE ../escape.txt - path escapes the workspace: ../escape.txt"
+   * Bold red capitals on purpose: this line has to be findable in a 200-line
+   * transcript from the back of a room, and greppable in a log file.
+   */
+  forbidden: (action, requested, reason = '') => {
+    const head = `${chalk.bold.red('FORBIDDEN')} ${chalk.bold.white(String(action ?? '').toUpperCase())}`;
+    const why = reason ? ` ${chalk.dim(`- ${reason}`)}` : '';
+    return `  ⛔ ${head} ${chalk.red(String(requested ?? ''))}${why}`;
   },
   /** a passed sandbox check in the --demo scorecard */
   pass: (text) => `${chalk.green('✓')} ${text}`,

@@ -4,10 +4,10 @@ A coding agent in plain Node, built to show what an agent actually is: **an LLM 
 a loop with tools and a sandbox**. The only dependency is `chalk`, and it only
 draws the coloured output.
 
-The loop itself is one ~205-line file (`src/agent.js`), of which ~120 lines are code:
+The loop itself is one ~215-line file (`src/agent.js`), of which ~120 lines are code:
 no flags, no colours, no banner. Everything else - tools, the system prompt, the
 sandbox, config, the console palette, lifecycle hooks, long-term memory, the scripted
-demo and the CLI - is its own module, and `src/` comes to ~2490 lines. Small enough
+demo and the CLI - is its own module, and `src/` comes to ~2940 lines. Small enough
 to read on a projector, and split so that the file to teach from never grows.
 
 ```
@@ -35,6 +35,16 @@ cp ../.env.example ../.env   # then add your OpenRouter key
 
 npm start                  # a session: type a task at the "task ›" prompt, then another
 ```
+
+## Docs in this folder
+
+| File | What it is |
+|---|---|
+| `README.md` | this page: the reference - every module, tool, hook, env var and limit |
+| `explainer-harness-js.html` | the talk page: chapters 01-17 walking the whole program, with a captured run |
+| `sandbox-guide.html` | the sandbox walkthrough (renamed from `sandbox.html`; the old filename no longer exists, so update any link or slide that still points at it) |
+
+Both HTML pages are self-contained - open them straight from disk, no build step.
 
 ## Sessions: one task after another
 
@@ -216,10 +226,11 @@ then the extension points, then the program that runs it.
 | `src/demo.js` | ~140 | the scripted model for `--demo`, and the scorecard that checks the sandbox guards held |
 | `src/cli.js` | ~460 | **the program** - flags, banner, the session loop, y/N confirm, `--hooks`/`--memory`, exit codes |
 | `src/config.js` | ~195 | `.env` discovery and loading, model + policy + memory config |
-| `src/workspace.js` | ~85 | path containment: the sandbox the file tools live in |
+| `src/workspace.js` | ~105 | path policy: `resolve()` fences writes to the workspace, `resolveRead()` lets reads go anywhere |
+| `src/sandbox.js` | ~430 | the write fence: save / edit / delete, the shell's visible write targets, and the bold red `FORBIDDEN` line |
 | `src/ui.js` | ~150 | the console palette (including every hook colour), plus the plain-English meaning of each exit code |
 | `src/llm.js` | ~65 | one HTTP request to OpenRouter (with a timeout), and message sanitising |
-| `test/` | ~1370 | offline tests for the loop, the prompt, sessions, the hooks, the demo's sandbox checks, the config, the tools, memory, the palette, the input field, the HTTP timeout and the path resolver |
+| `test/` | ~1700 | offline tests for the loop, the prompt, sessions, the hooks, the demo's sandbox checks, the config, the tools, the write fence, the shell write scan, memory, the palette, the input field, the HTTP timeout and the path policy |
 | `src/memory.md` | - | the long-term memory store: markdown, one bullet per memory, readable and editable by hand |
 | `workspace/` | - | the agent's only writable folder - everything it makes lands here |
 
@@ -246,7 +257,8 @@ think: (text) => `${chalk.cyan('think:')} ${text}`
 | step headings | blue |
 | `think:` | cyan |
 | `tool →` name and arguments | yellow / white |
-| `result ←` | green, or red when the tool returned `ERROR`/`DENIED`/non-zero exit |
+| `result ←` | green, or red when the tool returned `ERROR`/`DENIED`/`FORBIDDEN`/non-zero exit |
+| `⛔ FORBIDDEN SAVE <path>` | bold red capitals - one line per refused write, before anything touches disk |
 | `↳ stdout: ...` under `exit code 0` | dim - the first line the command printed |
 | `↳ exit N: ...` under a failure | dim - what that exit code means in English |
 | sandbox scorecard (`✓` / `✗`, `── sandbox checks ──`) | green / red checks, magenta heading |
@@ -277,6 +289,13 @@ Six of them change the workspace. Two change what the *next* process knows about
 | `run_command` | shell in the workspace root, 30 s timeout, output capped at 6000 chars, `env` allow-listed, returns `exit code N` + streams |
 | `remember` | append one durable note to `src/memory.md` (deduped, capped, dated) - survives the process |
 | `recall` | search the whole memory file; the injected digest is only the newest few |
+
+`list_files` and `read_file` accept any path, absolute included - reads are open on
+purpose. The other three file tools are the sandboxed ones: `src/sandbox.js` resolves
+every save, edit and delete, and a path outside `workspace/` comes back as
+`FORBIDDEN: SAVE <path> - <reason>` plus one bold red line on the console. The same
+check runs over `run_command`'s visible write targets, so `copy x ..\..\y` is refused
+too (`FORBIDDEN: COMMAND COPY ...`).
 
 ## Lifecycle hooks
 
@@ -529,9 +548,13 @@ transcript like everything else.
 6. **Human in the loop.** `CMD_POLICY=ask` (default) stops before every command;
    hard-deny patterns (`rm -rf /`, `del /s`, `format`, `shutdown`,
    `git push --force`, `curl | sh`, fork bombs) never run, whatever the policy says.
-7. **Least privilege.** File tools are confined to `workspace/`; absolute paths,
-   `..`, `~`, `%VAR%`, UNC paths and home/system folder names are refused before
-   any `mkdir` happens. The child process gets a 13-name env allow-list rather than
+7. **Least privilege, around writes.** `src/sandbox.js` fences the three mutating
+   actions - save, edit, delete - to `workspace/`: absolute paths, `..`, `~`, `%VAR%`,
+   UNC paths and home/system folder names are refused before any `mkdir` happens, and
+   every refusal prints one bold red `FORBIDDEN` line into the same console stream as
+   the lifecycle trace. Reads are deliberately open (`resolveRead`), because an agent
+   that cannot read a library, a log or a doc outside its own folder is useless. The
+   child process gets a 13-name env allow-list rather than
    `process.env`, so a command cannot echo `OPENROUTER_API_KEY` into the transcript.
 8. **Bounded autonomy.** `maxSteps` caps the loop; a truncated reply
    (`finish_reason: "length"`) is never dispatched as half a tool call - the model
@@ -548,8 +571,12 @@ transcript like everything else.
 ## Deliberate limits
 
 - `run_command` is a real shell: it starts in `workspace/` but a command can walk
-  out of that folder. The directory is not an OS sandbox - use a container if you
-  need actual isolation.
+  out of that folder. `src/sandbox.js` reads the command line and refuses the
+  obvious writes - `copy`/`move`/`xcopy`/`robocopy` destinations, `del`/`rm`/`rd`
+  operands, `>`/`>>` redirections, `curl -o`, PowerShell `-Destination` and the
+  writing cmdlets - with the same bold `FORBIDDEN` line. That is best effort, not
+  isolation: `node -e "fs.copyFileSync(...)"` or a downloaded script is invisible
+  to a command-line scan, so use a container if you need actual isolation.
 - No context management: a session carries only the last 24 messages, and the cut is
   positional (it lands on a user turn) rather than a summary. Long runs still grow
   until they hit that cap, and nothing is compacted or retrieved - the memory digest is
@@ -572,11 +599,14 @@ node src/cli.js --demo
 ```
 
 Narrate each line as it prints: *think → tool → result → think*. Then the demo
-turns on the sandbox: a `../escape.txt` write and a `~/.ssh/id_rsa` read are
-refused, `git push --force` is denied, a child process is asked for the API key and
-finds nothing, and a failing command comes back as `exit code 1` with its meaning
-spelled out. The run ends with a `sandbox checks` scorecard built from those same
-tool results - and the process exits non-zero if any check regressed.
+turns on the fence: a `../escape.txt` write and a `~/Desktop/pwned.txt` write are
+refused with a bold red `FORBIDDEN` line, a shell `copy` of the same file to the
+Desktop is refused too (the shell is not a way round the fence), a read one folder up
+succeeds (reads are open, writes are not), `git push --force` is denied, a child
+process is asked for the API key and finds nothing, and a failing command comes back
+as `exit code 1` with its meaning spelled out. The run ends with a `sandbox checks`
+scorecard built from those same tool results - and the process exits non-zero if any
+check regressed.
 
 Then delete `workspace/demo/hello.js`, run it live with `--yes`, and finish by
 asking the agent to do something it will fail at first (e.g. "edit hello.js to use
@@ -600,7 +630,7 @@ because the `remember` call from the previous run outlived the process.
 npm test        # node --test: offline, no key, no network
 ```
 
-89 tests cover the loop (including truncation and the max-steps stop), the lifecycle
+104 tests cover the loop (including truncation and the max-steps stop), the lifecycle
 hooks (every event documented, blocking, replacing, a throwing hook, the order a run
 fires them in), the scripted demo's sandbox checks, `.env` discovery and precedence,
 every tool's failure modes, the child-process env allow-list, the path resolver's

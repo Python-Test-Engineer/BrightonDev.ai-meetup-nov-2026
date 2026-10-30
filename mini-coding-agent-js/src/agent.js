@@ -34,6 +34,7 @@ import { TOOL_SCHEMAS, runTool } from './tools.js';
 import { buildSystemPrompt } from './prompt.js';
 import { heartbeat } from './heartbeat.js';
 import { Hooks } from './hooks.js';
+import { Sandbox } from './sandbox.js';
 import { ui } from './ui.js';
 import { pathToFileURL } from 'node:url';
 
@@ -45,7 +46,8 @@ import { pathToFileURL } from 'node:url';
  *
  * @param {object} options
  * @param {string} options.task             what the user asked for
- * @param {Workspace} options.workspace     where file tools are allowed to work
+ * @param {Workspace} options.workspace     where reads start, and the write root
+ * @param {Sandbox|null} [options.sandbox]  the save/edit/delete fence (sandbox.js)
  * @param {'allow'|'ask'|'deny'} options.commandPolicy
  * @param {number} options.maxSteps         how many model calls the loop may make
  * @param {(args: object) => Promise<object>} options.chatFn   one model request
@@ -60,7 +62,7 @@ import { pathToFileURL } from 'node:url';
  *                    messages: object[], steps?: number}>}
  */
 export async function runTask({
-  task, workspace, commandPolicy, maxSteps, chatFn, confirm,
+  task, workspace, sandbox = null, commandPolicy, maxSteps, chatFn, confirm,
   hooks = null, memory = null, history = [], log = console.log, heartbeatMs = 5000,
 }) {
   const started = Date.now();
@@ -80,9 +82,15 @@ export async function runTask({
   ];
   const taskIndex = messages.length - 1;
 
-  // Tools reach the world through this object: the sandbox root, the command
-  // policy, the approval callback, and the memory store.
-  const ctx = { workspace, commandPolicy, memory, confirm: confirm ?? (async () => 'deny') };
+  // Tools reach the world through this object: the sandbox root, the write
+  // fence (sandbox.js), the command policy, the approval callback, and memory.
+  const ctx = {
+    workspace,
+    sandbox: sandbox ?? new Sandbox({ workspace, log }),
+    commandPolicy,
+    memory,
+    confirm: confirm ?? (async () => 'deny'),
+  };
 
   // 1. SessionStart - the run exists, nothing has been sent. Project rules, a
   //    transcript file and any budget check belong here; a hook may also refuse

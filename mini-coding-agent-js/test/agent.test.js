@@ -110,7 +110,12 @@ test('a slow model call says it is still working instead of looking hung', async
 });
 
 test('the scripted demo tries every sandbox guard, and every guard holds', async () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-demo-'));
+  // The workspace lives one level down, so the demo's "../package.json" read has
+  // a real sibling file to find without touching the package itself.
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-demo-'));
+  const root = path.join(base, 'workspace');
+  fs.mkdirSync(root);
+  fs.writeFileSync(path.join(base, 'package.json'), '{ "name": "outside-the-sandbox" }\n', 'utf8');
   const workspace = new Workspace(root);
 
   let i = 0;

@@ -8,7 +8,15 @@ import { runTool, safeEnv } from '../src/tools.js';
 
 function ctx(overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-tools-'));
-  return { workspace: new Workspace(root), commandPolicy: 'allow', confirm: async () => 'allow', root, ...overrides };
+  return {
+    workspace: new Workspace(root),
+    commandPolicy: 'allow',
+    confirm: async () => 'allow',
+    // The FORBIDDEN line is the app's console output, not a test artefact.
+    log: () => {},
+    root,
+    ...overrides,
+  };
 }
 
 test('create_file writes, and refuses to clobber', async () => {
@@ -103,9 +111,24 @@ test('run_command obeys the policy: deny, ask-denied, hard-blocked', async () =>
 
 test('file tools cannot be talked out of the workspace', async () => {
   const c = ctx();
-  assert.match(await runTool('write_file', { path: '../escape.txt', content: 'x' }, c), /^ERROR: path escapes the workspace/);
-  assert.match(await runTool('read_file', { path: 'C:\\Windows\\win.ini' }, c), /^ERROR: absolute/);
+  const write = await runTool('write_file', { path: '../escape.txt', content: 'x' }, c);
+  assert.match(write, /^FORBIDDEN: SAVE \.\.\/escape\.txt/);
+  assert.match(await runTool('create_file', { path: 'C:\\Windows\\evil.txt', content: 'x' }, c), /^FORBIDDEN: SAVE/);
+  assert.match(await runTool('edit_file', { path: '../escape.txt', old_string: 'a', new_string: 'b' }, c), /^FORBIDDEN: EDIT/);
   assert.ok(!fs.existsSync(path.join(c.root, '..', 'escape.txt')));
+});
+
+test('reads are allowed outside the workspace', async () => {
+  const c = ctx();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'mca-read-'));
+  const file = path.join(outside, 'elsewhere.txt');
+  fs.writeFileSync(file, 'readable from anywhere', 'utf8');
+
+  const out = await runTool('read_file', { path: file }, c);
+  assert.match(out, /readable from anywhere/);
+  // An absolute path, and still not writable.
+  assert.match(await runTool('write_file', { path: file, content: 'clobbered' }, c), /^FORBIDDEN: SAVE/);
+  assert.equal(fs.readFileSync(file, 'utf8'), 'readable from anywhere');
 });
 
 test('the child process gets an allow-list, not the harness environment', async () => {

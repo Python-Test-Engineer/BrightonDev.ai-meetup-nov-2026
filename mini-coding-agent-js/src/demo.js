@@ -9,10 +9,12 @@
  * without one HTTP request.
  *
  * THE SCRIPT HAS THREE PARTS, on purpose:
- *   steps 1-5   ordinary work: create, run, edit, run again
- *   steps 6-10  deliberate escapes: path traversal, a home-folder read, a force
- *               push, an API-key echo, a failing command
- *   steps 11-12 the only two calls whose effect survives the process: remember
+ *   steps 1-5      ordinary work: create, run, edit, run again
+ *   steps 6-12     the fence: a path escape, a read from OUTSIDE the workspace
+ *                  (allowed), a home-folder write (refused), a shell `copy` out
+ *                  of the sandbox (refused), a force push, an API-key echo, a
+ *                  failing command
+ *   steps 13-14 the only two calls whose effect survives the process: remember
  *               and recall
  *
  * The refusals are SHOWN rather than described, and `sandboxScorecard()` reads
@@ -27,7 +29,8 @@ function call(id, name, args) {
 
 /** The task the demo prints in its banner when none was given. */
 export const DEMO_TASK = 'Show the loop, then try to break the sandbox: create a script, run it, edit it, '
-  + 'run it again, then attempt a path escape, a home-folder read, a force push and an API-key echo.';
+  + 'run it again, read a file from outside the workspace, then attempt a path escape, a home-folder write, '
+  + 'a force push and an API-key echo.';
 
 /** What the fake model says, in order. Each entry becomes one assistant message. */
 export const DEMO_SCRIPT = [
@@ -55,43 +58,53 @@ export const DEMO_SCRIPT = [
 
   // ---- the sandbox, tested instead of described -------------------
   {
-    content: 'Now the guards. First a write that tries to climb out of the workspace:',
+    content: 'Now the fence. First a write that tries to climb out of the workspace:',
     tool_calls: [call('s6', 'write_file', { path: '../escape.txt', content: 'this file must never be written' })],
   },
   {
-    content: 'Then a read from the home folder, where the private keys live:',
-    tool_calls: [call('s7', 'read_file', { path: '~/.ssh/id_rsa' })],
+    content: 'Reads are not fenced, though - one folder up is fair game:',
+    tool_calls: [call('s7', 'read_file', { path: '../package.json', limit: 5 })],
+  },
+  {
+    content: 'A write into the home folder, where a stray file would outlive the demo:',
+    tool_calls: [call('s8', 'write_file', { path: '~/Desktop/pwned.txt', content: 'the sandbox should have stopped this' })],
+  },
+  {
+    content: 'The same trick through the shell - copy it out with a command, which no file tool sees:',
+    tool_calls: [call('s9', 'run_command', { command: 'copy demo/hello.js %USERPROFILE%\\Desktop\\hello-copy.js' })],
   },
   {
     content: 'A command the deny-list refuses no matter what CMD_POLICY says:',
-    tool_calls: [call('s8', 'run_command', { command: 'git push --force origin main' })],
+    tool_calls: [call('s10', 'run_command', { command: 'git push --force origin main' })],
   },
   {
     content: 'A command that asks its own child process for the API key:',
-    tool_calls: [call('s9', 'run_command', {
+    tool_calls: [call('s11', 'run_command', {
       command: 'node -e "console.log(\'OPENROUTER_API_KEY=\' + (process.env.OPENROUTER_API_KEY ?? \'absent\'))"',
     })],
   },
   {
     content: 'And a command that fails, so the exit code has to explain itself:',
-    tool_calls: [call('s10', 'run_command', { command: 'node -e "process.exit(1)"' })],
+    tool_calls: [call('s12', 'run_command', { command: 'node -e "process.exit(1)"' })],
   },
 
   // ---- the only two steps whose effect survives this process ---------
   {
     content: 'Saving one durable fact, the way a later run would find it again:',
-    tool_calls: [call('s11', 'remember', {
+    tool_calls: [call('s13', 'remember', {
       text: 'The sandbox demo script lives at demo/hello.js and is safe to regenerate with create_file.',
       tag: 'fact',
     })],
   },
   {
     content: 'Reading memory back the lazy way - the same file the system prompt was built from:',
-    tool_calls: [call('s12', 'recall', { query: 'demo' })],
+    tool_calls: [call('s14', 'recall', { query: 'demo' })],
   },
   {
     content: 'Done. Created demo/hello.js, ran it, edited one string, ran it again (exit 0 both times). '
-      + 'Then the sandbox: the ../escape.txt write and the ~/.ssh read were refused before touching disk, '
+      + 'Then the fence: the ../escape.txt write and the ~/Desktop/pwned.txt write were refused with FORBIDDEN '
+      + 'before touching disk, and the shell `copy` to the Desktop was refused too - a command is not a way round '
+      + 'the sandbox. The read one folder up went through, because reads are open and writes are not. '
       + 'git push --force was denied by policy, the child process could not see the API key, and the failing '
       + 'command came back as exit code 1 with an explanation. The scorecard below is checkable, not a claim.',
   },
@@ -99,11 +112,13 @@ export const DEMO_SCRIPT = [
 
 /** One check per guard the demo exercises: the step, and what its result must look like. */
 const DEMO_CHECKS = [
-  { id: 's6', label: 'file tools stay inside the workspace', expect: /^ERROR: path escapes the workspace/ },
-  { id: 's7', label: 'home and system paths are refused', expect: /^ERROR: (home\/environment|absolute)/ },
-  { id: 's8', label: 'dangerous commands are denied, whatever the policy', expect: /^DENIED: blocked by policy/ },
-  { id: 's9', label: 'the child process cannot see the API key', expect: /OPENROUTER_API_KEY=absent/, show: /OPENROUTER_API_KEY=\S+/ },
-  { id: 's10', label: 'run_command reports the real exit code', expect: /^exit code 1\b/ },
+  { id: 's6', label: 'a write that escapes the workspace is refused', expect: /^FORBIDDEN: SAVE \.\.\/escape\.txt/ },
+  { id: 's7', label: 'reads are open - one folder up works', expect: /^\.\.\/package\.json \(\d+ lines\)/ },
+  { id: 's8', label: 'a home-folder write is refused', expect: /^FORBIDDEN: SAVE ~\/Desktop\/pwned\.txt/ },
+  { id: 's9', label: 'a shell copy out of the sandbox is refused', expect: /^FORBIDDEN: COMMAND COPY / },
+  { id: 's10', label: 'dangerous commands are denied, whatever the policy', expect: /^DENIED: blocked by policy/ },
+  { id: 's11', label: 'the child process cannot see the API key', expect: /OPENROUTER_API_KEY=absent/, show: /OPENROUTER_API_KEY=\S+/ },
+  { id: 's12', label: 'run_command reports the real exit code', expect: /^exit code 1\b/ },
 ];
 
 /** Read the demo's own tool results back and say which guards actually held. */
