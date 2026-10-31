@@ -1,0 +1,60 @@
+1 Understand what an AI agent really is by seeing one working end to end You
+will watch a complete mini coder app start up take a task read a file change
+it run a command and stop when it is done Nothing about it is hidden and
+nothing is left as an exercise You will see the whole thing work before we
+take it apart conceptually so you always know what the parts are for
+
+2 See how a single API call in a loop becomes a coding agent that reads and
+writes real files The starting point is one HTML page with one fetch call and
+one reply From there we add a loop and a small set of tools and that is enough
+to turn a chatbot into something that acts on a real workspace You will see
+exactly where the loop begins and ends and why removing it takes the agent
+away
+
+3 Recognise the four building blocks of every agent memory context looping
+and tool calling These four ideas appear in every agent you will meet no
+matter which framework or vendor is on the label We name them early and then
+point at each one inside the running app You will leave able to look at an
+unfamiliar agent and say which of the four it is relying on
+
+4 Understand tool calling and why the model can only act through functions
+your code runs The model cannot touch a file or a terminal It can only emit
+JSON that names a tool and your code decides whether and how to run it We look
+at how that request and result round trip actually works and why the tool
+descriptions themselves are a form of prompt engineering
+
+5 See how a sandbox keeps an agent inside its workspace and why reads stay
+open while writes do not An agent that can write anywhere is a risk so the
+mini coder fences every save edit and delete to one folder You will see the
+refusals happen live including writes attempted through the shell and you will
+see why reading outside the folder is deliberately still allowed
+
+6 Understand how an agent remembers things between runs using a plain readable
+file Messages only last as long as the process so the mini coder keeps a small
+markdown file and puts a bounded slice of it in front of the model next time
+We see a note survive a restart and we see how the file can be read diffed and
+edited by a human which is the opposite of a memory you cannot inspect
+
+7 See how lifecycle hooks let you extend an agent without editing the loop
+itself A fixed loop is easy to read but hard to change so the app exposes nine
+named moments where your own code gets a turn Each one can observe rewrite
+what the model sees or block a call outright and we show a permission layer
+built in a handful of lines
+
+8 Understand why a better harness beats a bigger model and how configuration
+and limits shape behaviour The same model can behave very differently
+depending on the prompt the tools the step budget and the safety rules wrapped
+around it We look at the settings that matter and at what happens when the
+agent runs out of steps or gets a truncated reply
+
+9 Learn to explore change and break a real codebase using AI tools then judge
+the result We use AI tools on the codebase as part of the method not as a
+shortcut We ask the agent to explain a module change a setting or break
+something on purpose and then we read what came back and decide whether it is
+right That judgement is the skill you will carry to your own projects
+
+10 Walk away knowing where streaming sub agents retries and container
+isolation fit in The mini coder is deliberately small so the next layers are
+easy to see We cover what streaming sub agents retries compaction and real
+container isolation would add and why each one is a layer on top of the loop
+rather than a replacement for it

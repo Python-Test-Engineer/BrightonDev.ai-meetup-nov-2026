@@ -1,0 +1,283 @@
+FROM AN AI AGENT IN HTML TO OUR OWN MINI CODER JS
+
+A high level view of how AI agents really work told through a working mini
+coder app you can run yourself starting from one HTML file and one fetch call
+and ending with a coding agent in your own terminal editing real files in a
+real workspace
+
+No frameworks No SDKs No magic Just an API call in a loop and every layer
+built on top of it in plain JavaScript
+
+THE PITCH
+
+Most courses teach you to import an agent library and call it This one gives
+you the high level view of what that library is doing and shows you a working
+mini coder app that does it
+
+You will begin with a single HTML page that sends a POST request to an LLM API
+and prints the reply That page is the whole idea Everything else in this
+course is the harness around it context tools looping memory a sandbox
+lifecycle hooks and finally a working coding agent in Node
+
+By the end you will understand how an agent that can list files read them
+create them edit them run shell commands remember what it learned between runs
+refuse to write outside its workspace and stop itself when it has done enough
+is put together You will have seen that mini coder run and you will have used
+it The loop itself is around 120 lines of code with every other concern in its
+own small module and that is the app we use as our worked example throughout
+
+The single most important idea in the course fits on a slide
+
+think then model call then tool calls If there are none print the answer and
+stop If there are some run the tools append the results and loop back
+
+If you understand that diagram you understand agents and you will recognise it
+in every agent you meet afterwards
+
+This course exists because agents look like a different world from ordinary
+software and they are not An agent is a REST API call with a payload wrapped
+in a loop with a few functions the model is allowed to ask for That is it
+Once you see it the mystery is gone and the engineering starts
+
+WHAT YOU WILL SEE WORKING
+
+1 Six standalone HTML pages no build step no framework each one a complete
+fetch against an OpenAI compatible chat completions endpoint
+
+a one shot chat completion the simplest possible case
+a RAG style page where extra context is injected into the system prompt
+a tool calling page with a real tools schema and a dispatch loop
+an animated walkthrough of a tool calling round trip
+a multi turn chat that keeps its history in localStorage
+an animated explainer of how memory actually works
+
+2 A working mini coder app in Node split into small modules you can run
+inspect and change
+
+agent js the loop about 120 lines of code nothing else
+prompt js the system prompt and the memory block
+tools js eight tools their schemas and the dispatcher
+llm js one HTTP request with a timeout
+sandbox js the write fence and the shell write scan
+workspace js path policy resolve and resolveRead
+memory js long term memory in a markdown file
+hooks js nine named lifecycle moments
+config js dot env discovery and precedence
+cli js the program flags banner session loop exit codes
+ui js the console palette and what each exit code means
+heartbeat js liveness so a slow call never looks frozen
+
+3 A test suite of offline tests that run the real loop with a fake model so
+you can prove the agent works without a key or a network
+
+WHAT YOU WILL LEARN
+
+The core building blocks of every agent
+
+MEMORY The model is stateless Every request must carry the whole
+conversation or the agent has no idea what just happened
+CONTEXT What you put in front of the model statically or dynamically is
+the difference between a clever demo and a useful tool
+LOOPING Repeat the call until the model stops asking for tools Remove the
+loop and you have a chatbot
+TOOL CALLING The model cannot touch a file It emits JSON naming a tool and
+your code runs it That is the only way a model can act on the world
+
+The engineering that turns those four into something you would actually use
+
+A sandbox that refuses writes outside the workspace including writes
+attempted through the shell
+An environment allow list for child processes so a command cannot echo your
+API key into the transcript
+A bounded step budget so the loop cannot run forever
+Errors returned as observations instead of exceptions so the model can
+correct itself on the next step
+Exit codes from run command so the agent knows whether its code worked
+A human in the loop confirm before commands hard deny the destructive ones
+Lifecycle hooks so you can extend the agent without editing the loop
+Long term memory in a plain markdown file you can read diff and delete
+Configuration precedence you can explain flag beats dot env and dot env
+beats shell
+
+The mindset which is the real subject
+
+PROMPT ENGINEERING becomes CONTEXT ENGINEERING becomes HARNESS ENGINEERING
+A better harness with a weaker model beats a weak harness with a stronger
+model Many times the harness is the deciding factor
+Look at the patterns and the structure not the syntax The syntax you can
+look up The shape is what you are here to learn
+
+COURSE OUTLINE
+
+SECTION 1 THE IDEA
+1 What an agent actually is in one diagram
+2 Demystify and simplify an agent as an API call
+3 The upside down mouse unlearning the old approach
+4 Email as an analogy for context follow ups tools and loops
+5 Why temperature zero is not deterministic
+6 Setting up an API key a browser and nothing else
+
+SECTION 2 YOUR FIRST AGENT IN HTML
+7 The one fetch call that matters
+8 Page 1 a one shot chat completion used as our first worked example
+9 Reading the raw response choices messages finish reasons
+10 Page 2 RAG without a vector database context in the system prompt
+11 Where a real retriever would slot in
+
+SECTION 3 TOOLS AND LOOPS
+12 Why a model needs tools at all
+13 The tools schema JSON that is really prompt engineering
+14 Page 3 an animated tool calling round trip
+15 Page 4 a working tool calling loop get weather and get sum
+16 The ReAct pattern reason act observe repeat
+17 What happens when a tool fails and why that is not a crash
+
+SECTION 4 MEMORY
+18 Page 5 an animated explainer of multi turn memory
+19 Page 6 chat with memory persisted to localStorage
+20 Context bloat what happens when history grows without limit
+
+SECTION 5 FROM PAGE TO PROGRAM
+21 Leaving the browser why the agent moves to Node
+22 Project layout one loop many small modules
+23 Reading agent js in full the seven beats of one step
+24 The system prompt as a file not a string literal
+25 One HTTP request with a timeout and a heartbeat
+
+SECTION 6 THE EIGHT TOOLS
+26 list files and read file open reads on purpose
+27 create file write file and edit file the three that change things
+28 Why create file refuses to overwrite
+29 edit file exact snippet replacement and its failure modes
+30 run command a real shell a timeout and capped output
+31 remember and recall two tools that change the next process
+
+SECTION 7 SAFETY AND BOUNDARIES
+32 The write fence absolute paths dot dot tilde environment variables and
+UNC paths all refused
+33 Reads are open writes are not and why that is the right trade
+34 The shell is not a way round the fence scanning write targets
+35 The environment allow list thirteen names not the whole process env
+36 Command policy allow ask deny and hard deny patterns
+37 Bounded autonomy step limits truncated replies and the step limit hook
+
+SECTION 8 MEMORY THAT SURVIVES
+38 Why messages are not memory
+39 memory md as the store no cache no index no drift
+40 The eager digest and the lazy recall two costs two paths
+41 Caps in three places and turning injection off
+42 Auditing memory what does it actually know about me
+
+SECTION 9 EXTENDING THE LOOP
+43 Why a fixed loop is not an extensible one
+44 Nine named moments from SessionStart to SessionEnd
+45 Observe rewrite or block the three things a hook may do
+46 A permission layer in fifteen lines
+47 A hook that throws must not take the loop with it
+48 Why a blocked tool call is an observation not an exception
+
+SECTION 10 THE PROGRAM AROUND THE LOOP
+49 The CLI flags banner and what won where
+50 Configuration precedence flag then dot env then shell
+51 Sessions one task after another and what carries over
+52 Trimming history so the request stays valid
+53 Exit codes and what each one means in English
+
+SECTION 11 PROVING IT WORKS
+54 Testing an agent without a key or a network
+55 A fake model the real loop and the assertions that matter
+56 The scripted demo and the sandbox scorecard
+57 Watching a failure come back as a tool result and get fixed
+
+SECTION 12 WHERE NEXT
+58 Streaming sub agents retries and skills layers not replacements
+59 Context management compaction and retrieval
+60 Container isolation when best effort is not enough
+61 Building your own harness for your own work
+
+WHO THIS COURSE IS FOR
+
+Developers who use AI coding tools every day and want to know how they work
+inside
+JavaScript and TypeScript developers who want a first real agent project
+without a framework hiding the interesting parts
+Python developers who are comfortable with the ideas and want to see them in
+plain Node with no dependency beyond one for colour
+Anyone who has read about agents and still cannot picture the loop
+Engineers who need to explain review or approve agent behaviour at work and
+want to be able to point at the code that decides it
+
+You do not need machine learning You do not need a maths background You do
+not need to have built an agent before You do need to be comfortable reading
+JavaScript and to have used a terminal once or twice
+
+REQUIREMENTS
+
+A modern browser
+Node 20 or newer for the second half of the course
+An OpenRouter account and an API key Any model that supports tool calling
+will do and the course shows how to swap models with one environment
+variable
+Python is optional and only to serve the HTML pages over HTTP There is no
+build step anywhere in this course
+
+A note on the key the HTML demos read it from a local file at runtime That is
+fine for learning on your own machine and the course says plainly why it is
+not how you would ship it The Node agent reads it from dot env never prints
+it and never passes it to a child process
+
+HOW THE COURSE IS TAUGHT
+
+This is a high level view with a working mini coder app It is not a code along
+
+We do not go deep into the code and we do not type it out together line by
+line The code is there to make the ideas concrete We show you the shape of it
+the part that carries the idea and we move on The full explanations the detail
+the edge cases and the reasoning behind each decision live in the ebooks that
+accompany this course and those are where you go when you want the depth
+
+What you do get is a complete working mini coder app You see it run on real
+tasks you see it read and write real files and you see it stop itself when it
+should That working app is the anchor for every concept in the course A
+concept is not just described it is pointed at in something that already runs
+
+Think of every code sample as an illustration You are not here to memorise it
+You are here to see the pattern so that when you meet the same pattern in a
+framework or in your own codebase you recognise it immediately
+
+Each concept arrives in the order you would meet it if you were building this
+yourself First the smallest thing that works then the problem that appears
+then the smallest fix for that problem Nothing is introduced before the reason
+for it is on screen
+
+We also use AI tools to modify and explore the codebase with you That is part
+of the method not a shortcut around it We ask the agent to explain a file to
+summarise a module to change a setting to break something on purpose and then
+we read what came back and judge it That is exactly the skill this course is
+built around and it is the same skill you will use on your own projects
+
+So you will see code run you will see it change you will see it fail and you
+will see it fixed but you will not be copying it down The code you finish with
+is not a toy you throw away It is a working harness you can point at your own
+workspace extend with your own tools and grow into whatever you need next and
+the ebooks are your reference for the parts we only sketched on screen
+
+WHAT THIS COURSE IS NOT
+
+It is not a code along You will not be typing the project out with me
+It is not a deep dive into every line of code The code illustrates the
+concepts and the ebooks carry the detail
+It is not a tour of an agent framework There is no framework That is the
+point
+It is not a machine learning course No training no embeddings no vectors
+It is not a promise that a small agent replaces a large product It is a
+promise that you will understand the large product afterwards
+It is not production hardening The course is honest about where best effort
+stops and a container has to start
+
+THE ONE THING TO TAKE AWAY
+
+An agent is a loop around a model call with a handful of functions the model is
+allowed to ask for and a harness that decides what those functions may touch
+
+Everything else is engineering you already know how to do
