@@ -1,0 +1,3 @@
+OPENROUTER_API_KEY=sk-or-v1-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+MODEL="deepseek-v4.1-flash-1017"
+/* This is needed for html pages which cannot access .env as node is not running */
