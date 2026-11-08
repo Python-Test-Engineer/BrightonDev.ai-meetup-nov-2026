@@ -278,6 +278,149 @@
       font-weight: 600;
     }
 
+    /* ---------- warning callout (the upside-down mouse) ---------- */
+    .card.warn {
+      position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      padding: 32px 36px;
+      border: 2px solid #e3a92c;
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, #fffaf0 0%, #fff2da 100%);
+      box-shadow: 0 0 0 5px rgba(227, 169, 44, .14), 0 18px 40px -16px rgba(193, 79, 49, .35);
+      animation: warn-glow 2.8s ease-in-out infinite;
+      overflow: hidden;
+    }
+
+    /* caution stripes, tucked into the corners so the text stays readable */
+    .card.warn::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(135deg, rgba(227, 169, 44, .16) 0 16px, transparent 16px 32px);
+      -webkit-mask-image: linear-gradient(90deg, #000 0, transparent 26%, transparent 74%, #000 100%);
+      mask-image: linear-gradient(90deg, #000 0, transparent 26%, transparent 74%, #000 100%);
+    }
+
+    .card.warn .warn-icon {
+      position: relative;
+      flex: 0 0 auto;
+      width: 66px;
+      height: 66px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #7a4a00;
+      background: radial-gradient(circle at 32% 26%, #ffefbe, #f2b53c 72%);
+      border: 1.5px solid #d99a22;
+      box-shadow: inset 0 -3px 0 rgba(122, 74, 0, .16), 0 8px 18px -6px rgba(217, 154, 34, .75);
+      transform-origin: 50% 88%;
+      animation: warn-wiggle 3.6s ease-in-out infinite;
+    }
+
+    .card.warn .warn-icon svg {
+      width: 36px;
+      height: 36px;
+      display: block;
+    }
+
+    .card.warn .warn-body {
+      position: relative;
+    }
+
+    .card.warn .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 17px;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #7a4a00;
+      background: #f8c96b;
+      border: 1px solid #d99a22;
+      border-radius: 999px;
+      padding: 3px 14px;
+      margin-bottom: 12px;
+    }
+
+    .card.warn p {
+      color: #4a3a1d;
+      font-size: 28px;
+      line-height: 1.55;
+    }
+
+    .card.warn strong {
+      color: #7a3a0c;
+    }
+
+    @keyframes warn-glow {
+
+      0%,
+      100% {
+        box-shadow: 0 0 0 5px rgba(227, 169, 44, .14), 0 18px 40px -16px rgba(193, 79, 49, .28);
+      }
+
+      50% {
+        box-shadow: 0 0 0 10px rgba(227, 169, 44, .07), 0 18px 44px -12px rgba(193, 79, 49, .44);
+      }
+    }
+
+    @keyframes warn-wiggle {
+
+      0%,
+      84%,
+      100% {
+        transform: rotate(0deg);
+      }
+
+      87% {
+        transform: rotate(-10deg);
+      }
+
+      90% {
+        transform: rotate(9deg);
+      }
+
+      93% {
+        transform: rotate(-6deg);
+      }
+
+      96% {
+        transform: rotate(3deg);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .card.warn {
+        flex-direction: column;
+        gap: 14px;
+        padding: 26px 24px;
+      }
+
+      .card.warn .warn-icon {
+        width: 54px;
+        height: 54px;
+      }
+
+      .card.warn .warn-icon svg {
+        width: 30px;
+        height: 30px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      .card.warn,
+      .card.warn .warn-icon {
+        animation: none;
+      }
+    }
+
     /* ---------- lists ---------- */
     ol,
     ul {
@@ -606,6 +749,38 @@
   </header>
 
   <main class="wrap">
+    <br><br><br><br>
+    <!-- ============ THE UPSIDE-DOWN MOUSE ============ -->
+    <section id="mouse">
+      <div class="card warn">
+        <span class="warn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M12 3.2 21.3 19.4a1.25 1.25 0 0 1-1.08 1.87H3.78a1.25 1.25 0 0 1-1.08-1.87Z" />
+            <path d="M12 9.3v4.4" />
+            <path d="M12 17.2h.01" />
+          </svg>
+        </span>
+        <div class="warn-body">
+          <span class="tag">⚠ Warning</span>
+          <p style="margin:0">This may seem simple — almost obvious — but it is actually <strong>difficult to
+              grasp</strong>. The shift in thinking is subtle, and most people miss it on first contact.</p>
+        </div>
+      </div>
+
+      <h3>The upside-down mouse</h3>
+      <p>Here's the image I keep coming back to. Picture an upside-down computer mouse. When you pick one up the wrong
+        way round, it's disorienting — but it's the <em>same</em> set of movements. Left, right, up, down. Just
+        reversed. It takes a while to retrain your hand, but you already know how to do the motions.</p>
+      <div class="img-row">
+        <figure><img src="./images/mouse-up.jpg" alt="Mouse the right way up"></figure>
+        <figure><img src="./images/mouse-down.jpg" alt="Upside-down mouse"></figure>
+      </div>
+      <p>Agentic AI is the upside-down mouse. The concepts are familiar — request, response, context, functions, loops.
+        We've just got to flip how we think about who's in charge.</p>
+    </section>
+
+    <hr class="divider">
 
     <!-- ============ PITCH ============ -->
     <section id="pitch">
@@ -668,17 +843,6 @@
       </ol>
       <p>As a talk member once said "This is very underwhelming." </p>
       <p>I took it as a compliment.</p>
-
-      <h3>The upside-down mouse</h3>
-      <p>Here's the image I keep coming back to. Picture an upside-down computer mouse. When you pick one up the wrong
-        way round, it's disorienting — but it's the <em>same</em> set of movements. Left, right, up, down. Just
-        reversed. It takes a while to retrain your hand, but you already know how to do the motions.</p>
-      <div class="img-row">
-        <figure><img src="./images/mouse-up.jpg" alt="Mouse the right way up"></figure>
-        <figure><img src="./images/mouse-down.jpg" alt="Upside-down mouse"></figure>
-      </div>
-      <p>Agentic AI is the upside-down mouse. The concepts are familiar — request, response, context, functions, loops.
-        We've just got to flip how we think about who's in charge.</p>
     </section>
 
     <hr class="divider">
