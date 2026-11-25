@@ -1,5 +1,8 @@
 
-create hello-world js file with random number in its filename and run it with output with same number in filename
+1. create hello-world js file with random number in its filename and run it with output with same number in filename
+
+2. save a file test.txt that contains 'HELLO WORLD' and save to the desktop  
+# expect FORBIDDEN: SAVE ... - the Desktop is outside the workspace
 
 "create hello.js that prints today's date and time, run it and save to current folder with a random number between 100 and 999 as hellloNNN.js where NNN is that random number printing out in console location of the file and use that for the saved output as hello-output-NNN.txt"  
 
