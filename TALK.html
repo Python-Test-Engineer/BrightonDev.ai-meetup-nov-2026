@@ -609,12 +609,14 @@
     }
 
     /* ---------- lightbox ---------- */
-    figure img {
+    figure img,
+    #the-loop {
       cursor: zoom-in;
       transition: filter .15s ease;
     }
 
-    figure img:hover {
+    figure img:hover,
+    #the-loop:hover {
       filter: brightness(1.03) contrast(1.02);
     }
 
@@ -1113,7 +1115,7 @@
         };
       }
 
-      document.querySelectorAll('figure img').forEach(function (img) {
+      document.querySelectorAll('figure img, #the-loop').forEach(function (img) {
         img.addEventListener('click', function () {
           // Images grouped in an .img-row open together (e.g. the two mouse photos)
           var row = img.closest('.img-row');
