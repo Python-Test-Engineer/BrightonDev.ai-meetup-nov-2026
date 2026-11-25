@@ -735,7 +735,7 @@
     <span class="eyebrow">BrightonDev.ai Meetup</span>
     <h1>AI Agents<br><span class="grad">Demystified</span> and Simplified</h1>
     <p class="sub">A BrightonDev.ai Meetup talk by <span class="author"><b>Craig West</b></span></p>
-    <p class="author">All code, slides and more in the repo below.</p>
+    <h2>All code, slides and more in the repo below.</h2>
     <figure class="fig-qr">
       <img src="./qr.png" alt="QR code linking to the GitHub repo">
     </figure>
@@ -968,6 +968,20 @@
         </div>
 
       </div>
+
+      <div class="card warn">
+        <span class="warn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M12 3.2 21.3 19.4a1.25 1.25 0 0 1-1.08 1.87H3.78a1.25 1.25 0 0 1-1.08-1.87Z" />
+            <path d="M12 9.3v4.4" />
+            <path d="M12 17.2h.01" />
+          </svg>
+        </span>
+        <div class="warn-body">
+          <span class="tag">🚀 Demo time!</span>
+        </div>
+      </div>
     </section>
 
     <hr class="divider">
@@ -987,6 +1001,49 @@
       <p>That's liberating. It means the craft and the content of our jobs still matter. The engineering around the
         model is what makes it sing. My minimal coding agent is just a loop that runs until it finds an answer — and
         then I look back at the demo and think: everything we saw tonight was already there in miniature.</p>
+
+      <h3>The harness toolbox</h3>
+      <p>When you strip a coding agent down to its essentials, the harness only needs a handful of primitives:</p>
+
+      <div class="card"><b>read</b> — inspect a file's contents.</div>
+      <div class="card"><b>write</b> — create or overwrite a file.</div>
+      <div class="card"><b>list</b> — see what files and folders exist.</div>
+      <div class="card"><b>delete</b> — remove a file or folder.</div>
+      <div class="card"><b>bash</b> — run any shell command.</div>
+
+      <div class="card note">
+        <span class="tag">The point</span>
+        <p style="margin:0">Of those five, <strong><code>bash</code> is the only one you truly need</strong>. A shell command can read, write, list, and delete for you. The others are convenience wrappers, but <code>bash</code> subsumes them all.</p>
+      </div>
+
+      <h3>Taking the harness further</h3>
+      <p>The toolbox above is the bare minimum. If you want a production-grade harness, you bolt on more armour:</p>
+
+      <div class="card"><b>Sandboxing</b> — run <code>bash</code> inside a container, a VM, or a restricted user so an errant <code>rm -rf /</code> can't escape.</div>
+      <div class="card"><b>Git-aware checkpoints</b> — auto-commit before every edit so you can rewind if the agent paints itself into a corner.</div>
+      <div class="card"><b>File-watching &amp; linting</b> — validate every write with formatters, type-checkers, or tests before the loop continues.</div>
+      <div class="card"><b>Token-budget guardrails</b> — cap how much history you resend and summarise older turns when the context window gets tight.</div>
+      <div class="card"><b>Approval gates</b> — pause the loop before destructive operations and let a human click yes or no.</div>
+      <div class="card"><b>Multi-file context management</b> — let the agent ask for the codebase tree, pick which files matter, and open only those into context.</div>
+      <div class="card"><b>Context compaction</b> — use summaries, trimming, or compacting to shrink older conversation turns so the token budget stays flat even as the chat grows long.</div>
+      <div class="card"><b>Sliding-window summary</b> — replace the oldest messages with a running summary instead of dropping them outright; the model keeps the gist without the bloat.</div>
+
+      <p>None of these are magic. Each one is just more code wrapped around the same loop — more harness, not more model. And that is the whole game: build the loop, then harden it.</p>
+
+      <div class="card warn">
+        <span class="warn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M12 3.2 21.3 19.4a1.25 1.25 0 0 1-1.08 1.87H3.78a1.25 1.25 0 0 1-1.08-1.87Z" />
+            <path d="M12 9.3v4.4" />
+            <path d="M12 17.2h.01" />
+          </svg>
+        </span>
+        <div class="warn-body">
+          <span class="tag">🚀 Coding Agent Demo!</span>
+          <p style="margin:0">I have a minimal coding-agent running locally. It is the smallest harness I could build — and with these ideas, it edits real files, runs real tests, and recovers from real mistakes. Time to see the loop in action.</p>
+        </div>
+      </div>
     </section>
 
     <hr class="divider">
