@@ -40,9 +40,11 @@ function makeConfirm() {
     if (!process.stdin.isTTY) return 'deny';
 
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    const answer = await new Promise((resolve) => rl.question(`  ${ui.prompt('run?')} ${command} ${ui.dim('[y/N]')} `, resolve));
+    const answer = await new Promise((resolve) => rl.question(`  ${ui.prompt('run?')} ${command} ${ui.dim('[Y/n]')} `, resolve));
     rl.close();
-    return /^y(es)?$/i.test(answer.trim()) ? 'allow' : 'deny';
+    const trimmed = answer.trim();
+    if (trimmed === '') return 'allow';
+    return /^n(o)?$/i.test(trimmed) ? 'deny' : 'allow';
   };
 }
 
