@@ -25,3 +25,4 @@ with the `recall` tool.
 - [gotcha] run_command in this sandbox uses Windows cmd.exe: `pwd`, `ls` and shell redirects like `> /dev/null` fail (redirects outside the sandbox get FORBIDDEN) - use `echo %CD%`, `dir /b`, `type file` instead. _(2026-11-24)_
 - [fix] In this sandbox, redirecting node output to a file inside the workspace works fine with cmd.exe syntax: `node .\hello.js > hello-output-408.txt 2>&1` (only redirects to paths outside the workspace get FORBIDDEN), and `type <file>` reads it back. _(2026-11-25)_
 - [gotcha] The workspace folder is wiped between agent sessions (only .gitkeep persists), so files created in an earlier run (e.g. hello.js, hello408.js) may be gone - re-check with `dir /b` before assuming they exist. _(2026-11-25)_
+- [fact] In workspace/, `node file.js` runs ESM syntax (import/export) fine - scripts like hello-random.js use `import { writeFileSync } from 'node:fs'` and `import.meta.url` and run without extra flags. _(2026-11-25)_
