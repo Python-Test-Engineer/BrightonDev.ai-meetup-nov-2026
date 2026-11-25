@@ -22,7 +22,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { Workspace, PathError } from './workspace.js';
+import { Workspace, PathError, isInside } from './workspace.js';
 import { ui } from './ui.js';
 
 /** The default sandbox: `mini-coding-agent-js/workspace`, next to the code. */
@@ -116,6 +116,9 @@ export class Sandbox {
 
   /** Write a file that `check()` already allowed. Parent folders are created. */
   write(target, content) {
+    if (!isInside(this.root, target.abs)) {
+      this.forbid('save', target.rel ?? target.abs, 'path escapes the workspace');
+    }
     const existed = fs.existsSync(target.abs);
     fs.mkdirSync(path.dirname(target.abs), { recursive: true });
     fs.writeFileSync(target.abs, String(content), 'utf8');

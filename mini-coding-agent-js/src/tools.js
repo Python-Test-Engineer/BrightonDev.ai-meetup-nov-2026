@@ -315,7 +315,7 @@ const HANDLERS = {
     const updated = args.replace_all
       ? source.split(oldStr).join(newStr)
       : source.replace(oldStr, () => newStr); // function form: no $1 surprises
-    fs.writeFileSync(target.abs, updated, 'utf8');
+    sandbox.write(target, updated);
 
     const lineNo = source.slice(0, source.indexOf(oldStr)).split(/\r?\n/).length;
     const replaced = args.replace_all ? count : 1;

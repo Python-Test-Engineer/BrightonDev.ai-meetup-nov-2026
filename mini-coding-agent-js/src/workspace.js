@@ -48,7 +48,7 @@ function realResolve(abs) {
   return path.join(fs.realpathSync(cur), ...rest);
 }
 
-function isInside(root, target) {
+export function isInside(root, target) {
   const rel = path.relative(root, target);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 }

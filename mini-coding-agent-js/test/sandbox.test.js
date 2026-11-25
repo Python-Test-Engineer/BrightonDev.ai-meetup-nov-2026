@@ -121,3 +121,11 @@ test('the tool layer turns a refusal into a FORBIDDEN observation', async () => 
   assert.match(ok, /^created fine\.txt/);
   assert.equal(lines.length, 1, 'only the refusal printed');
 });
+
+test('write refuses an outside path even when check() is bypassed', () => {
+  const { sandbox, outside, lines } = tmpSandbox();
+  const target = { abs: path.join(outside, 'direct.txt'), rel: '../direct.txt' };
+  assert.throws(() => sandbox.write(target, 'nope'), ForbiddenError);
+  assert.ok(!fs.existsSync(path.join(outside, 'direct.txt')));
+  assert.equal(lines.length, 1, 'defence-in-depth refusal printed');
+});
